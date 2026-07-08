@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+/* 시스템 다크모드 설정을 Tailwind dark: 접두사에 연결 */
+@variant dark (@media (prefers-color-scheme: dark));
+
+/* ─────────────────────────────────────────
+   TripFlow J — 디자인 토큰
+   ───────────────────────────────────────── */
+
+@theme inline {
+  --color-background: #f5f5f7;
+  --color-foreground: #1d1d1f;
+  --color-muted: #6e6e73;
+  --color-accent: #0071e3;
+  --color-accent-hover: #0077ed;
+  --color-accent-muted: #2997ff;
+  --color-card: #ffffff;
+  --color-card-border: rgb(0 0 0 / 0.06);
+  --color-card-border-hover: rgb(0 0 0 / 0.1);
+  --font-sans: var(--font-noto-sans-kr), -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+}
+
+/* ─────────────────────────────────────────
+   기본 스타일
+   ───────────────────────────────────────── */
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─────────────────────────────────────────
+   등장 애니메이션
+   ───────────────────────────────────────── */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animation-delay-100 {
+  animation-delay: 100ms;
+}
+
+.animation-delay-200 {
+  animation-delay: 200ms;
+}
+
+.country-flag {
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji",
+    "Twemoji Mozilla", emoji, sans-serif;
+  font-style: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
