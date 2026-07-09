@@ -1,20 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTrips } from "@/contexts/TripContext";
 import type { CreateTripInput, Trip } from "@/types/trip";
-import BrandHeader from "./BrandHeader";
+import { createDefaultChecklistItems } from "@/lib/checklist-utils";
+import { getCompletedTripsForAlbum } from "@/lib/trip-album";
+import { saveTripDetailData } from "@/lib/trip-detail-storage";
+import { createEmptyTripDetailData } from "@/types/trip-detail";
+import {
+  getHomeCarouselTrips,
+  hasActiveHomeTrips,
+} from "@/lib/trip-home-utils";
+import { PageContainer } from "@/components/ui";
+import HomeGreeting from "./HomeGreeting";
+import HomeWelcomeHero from "./HomeWelcomeHero";
+import HomeHeroCarousel from "./HomeHeroCarousel";
 import CreateTripButton from "./CreateTripButton";
-import RecentTripsSection from "./RecentTripsSection";
+import HomeAlbumCard from "./HomeAlbumCard";
 import CreateTripModal from "@/components/trip/CreateTripModal";
+import { HOME_CARD_STACK_CLASS } from "./home-layout";
 
-/**
- * HomeScreen — TripFlow J 앱의 첫 화면(홈)
- */
+/** TripFlow J 앱 홈 화면 */
 export default function HomeScreen() {
   const { trips, addTrip, updateTrip, deleteTrip } = useTrips();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+
+  const carouselTrips = useMemo(() => getHomeCarouselTrips(trips), [trips]);
+  const completedTrips = useMemo(
+    () => getCompletedTripsForAlbum(trips),
+    [trips],
+  );
+  const hasNoTrips = trips.length === 0;
+  const showCarousel = hasActiveHomeTrips(trips);
 
   const openCreateModal = () => {
     setEditingTrip(null);
@@ -35,7 +53,12 @@ export default function HomeScreen() {
     if (editingTrip) {
       updateTrip(editingTrip.id, input);
     } else {
-      addTrip(input);
+      const newTrip = addTrip(input);
+      const detail = createEmptyTripDetailData();
+      if (input.includeDefaultChecklist !== false) {
+        detail.checklist = createDefaultChecklistItems();
+      }
+      saveTripDetailData(newTrip.id, detail);
     }
   };
 
@@ -44,34 +67,32 @@ export default function HomeScreen() {
   };
 
   return (
-    <div
-      className="
-        relative min-h-full
-        bg-gradient-to-b from-[#eef6fc] via-[#f7fafd] to-white
-        dark:from-[#0d1117] dark:via-[#0a0a0a] dark:to-[#000000]
-      "
-    >
-      <main className="relative mx-auto flex min-h-full max-w-lg flex-col px-7 pb-16 pt-20 sm:px-10 sm:pt-24">
-        <BrandHeader />
+    <div className="relative min-h-full bg-background">
+      <PageContainer
+        constrained
+        className="relative flex min-h-full flex-col gap-8 pb-20 pt-10 sm:mx-auto sm:pt-14"
+      >
+        {!hasNoTrips && <HomeGreeting />}
 
-        <div className="mt-14">
-          <CreateTripButton onClick={openCreateModal} />
+        <div className={HOME_CARD_STACK_CLASS}>
+          {hasNoTrips ? (
+            <HomeWelcomeHero onCreateTrip={openCreateModal} />
+          ) : showCarousel ? (
+            <>
+              <HomeHeroCarousel
+                trips={carouselTrips}
+                onEdit={openEditModal}
+                onDelete={handleDelete}
+              />
+              <CreateTripButton onClick={openCreateModal} />
+            </>
+          ) : (
+            <CreateTripButton onClick={openCreateModal} />
+          )}
+
+          <HomeAlbumCard completedCount={completedTrips.length} />
         </div>
-
-        {trips.length === 0 ? (
-          <p className="mt-16 text-center text-sm text-[#6e6e73] dark:text-[#a1a1a6]">
-            아직 여행이 없습니다.
-          </p>
-        ) : (
-          <div className="mt-16">
-            <RecentTripsSection
-              trips={trips}
-              onEdit={openEditModal}
-              onDelete={handleDelete}
-            />
-          </div>
-        )}
-      </main>
+      </PageContainer>
 
       <CreateTripModal
         isOpen={isModalOpen}

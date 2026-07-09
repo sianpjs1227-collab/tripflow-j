@@ -1,40 +1,65 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Map as MapIcon, Plus, Route } from "lucide-react";
 import type { Trip } from "@/types/trip";
+import type { Place, PlaceInput, PlaceTravelRecordInput } from "@/types/place";
 import type { ScheduleInput, ScheduleItem } from "@/types/schedule";
-import {
-  upsertPlaceInData,
-  useTripDetail,
-} from "@/contexts/TripDetailContext";
+import { useTripDetail } from "@/contexts/TripDetailContext";
 import {
   buildEventFromInput,
   toScheduleItem,
-  toScheduleItems,
 } from "@/lib/event-utils";
 import {
   buildTripDates,
-  formatScheduleDate,
+  formatScheduleChipDate,
   groupEventsByDate,
 } from "@/lib/schedule-utils";
-import { openDirectionsForScheduleItem } from "@/lib/schedule-maps";
-import { getPlaceById } from "@/lib/place-utils";
+import {
+  analyzeDayGaps,
+  buildDayRouteUrl,
+  getDayRouteItems,
+  suggestTimeInGap,
+  type DayGap,
+} from "@/lib/day-schedule-utils";
+import type { GapRecommendedPlace } from "@/lib/day-gap-recommendations";
+import { scheduleItemToPlace } from "@/lib/schedule-maps";
+import { usePlaceActionSheet } from "@/hooks/usePlaceActionSheet";
+import { usePlaceFavorites } from "@/hooks/usePlaceFavorites";
+import PlaceActionSheet from "@/components/map/PlaceActionSheet";
+import { getPlaceById, createPlace } from "@/lib/place-utils";
+import { applyTravelRecord } from "@/lib/place-visit";
+import { formatExpenseAmount } from "@/lib/expense-utils";
+import { tripHasExchangeRate } from "@/lib/currency-utils";
+import { STICKY_LAYER_VARS, useStickyLayer } from "@/hooks/useStickyLayer";
+import { Button, Card, Chip, Text } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import ScheduleModal from "./ScheduleModal";
+import DayGapSection from "./DayGapSection";
+import DaySummaryCard from "./DaySummaryCard";
+import ScheduleItemCard from "./ScheduleItemCard";
+import ScheduleDaySubviewTabs, {
+  type ScheduleDaySubview,
+} from "./ScheduleDaySubviewTabs";
 
 interface ScheduleTabProps {
   trip: Trip;
 }
 
 function ScheduleTabContent({ trip }: ScheduleTabProps) {
-  const { data, updateData } = useTripDetail();
+  const { tripId, data, updateData } = useTripDetail();
+  const { favoriteIds, isFavorite, toggleFavorite } = usePlaceFavorites(tripId);
+  const { previewState, openPlace, closePlace } = usePlaceActionSheet();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
-  const [selectedDate, setSelectedDate] = useState("");
-
-  const scheduleItems = useMemo(
-    () => toScheduleItems(data.events, data.places),
-    [data.events, data.places],
+  const [gapPrefill, setGapPrefill] = useState<Partial<ScheduleInput> | null>(
+    null,
   );
+  const [selectedDate, setSelectedDate] = useState("");
+  const [activeSubview, setActiveSubview] =
+    useState<ScheduleDaySubview>("schedule");
+  const dayChipsRef = useStickyLayer(STICKY_LAYER_VARS.dayChips);
+  const subviewTabsRef = useStickyLayer(STICKY_LAYER_VARS.scheduleSubview);
 
   const grouped = useMemo(() => {
     const groups = groupEventsByDate(data.events);
@@ -59,7 +84,8 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
     () =>
       tripDates.map((date, index) => ({
         date,
-        label: `Day${index + 1}`,
+        dayNumber: index + 1,
+        chipDate: formatScheduleChipDate(date),
         items: groupedByDate.get(date) ?? [],
       })),
     [tripDates, groupedByDate],
@@ -83,38 +109,31 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
 
   const openCreateModal = () => {
     setEditingItem(null);
+    setGapPrefill(null);
     setIsModalOpen(true);
   };
 
   const openEditModal = (item: ScheduleItem) => {
     setEditingItem(item);
+    setGapPrefill(null);
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingItem(null);
+    setGapPrefill(null);
   };
 
   const handleSave = (input: ScheduleInput) => {
     updateData((prev) => {
-      const { data: withPlace, place } = upsertPlaceInData(
-        prev,
-        input.placeName,
-        input.mapsLink,
-      );
-
-      const event = buildEventFromInput(
-        input,
-        place.id,
-        editingItem?.id,
-      );
+      const event = buildEventFromInput(input, editingItem?.id);
 
       const events = editingItem
-        ? withPlace.events.map((e) => (e.id === editingItem.id ? event : e))
-        : [...withPlace.events, event];
+        ? prev.events.map((e) => (e.id === editingItem.id ? event : e))
+        : [...prev.events, event];
 
-      return { ...withPlace, events };
+      return { ...prev, events };
     });
   };
 
@@ -125,130 +144,340 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
     }));
   };
 
+  const handleAddPlace = (input: PlaceInput): Place => {
+    const place = createPlace(input);
+    updateData((prev) => ({
+      ...prev,
+      places: [...prev.places, place],
+    }));
+    return place;
+  };
+
+  const handleSaveTravelRecord = (
+    placeId: string,
+    input: PlaceTravelRecordInput,
+  ) => {
+    updateData((prev) => ({
+      ...prev,
+      places: prev.places.map((place) =>
+        place.id === placeId ? applyTravelRecord(place, input) : place,
+      ),
+    }));
+  };
+
+  const getPlaceFromData = (placeId: string) =>
+    data.places.find((place) => place.id === placeId);
+
+  const handleAddToScheduleFromSheet = (
+    place: Place,
+    prefill?: Partial<ScheduleInput>,
+  ) => {
+    closePlace();
+    setEditingItem(null);
+    setGapPrefill(
+      prefill ?? {
+        placeId: place.id,
+        date: selectedDate,
+      },
+    );
+    setIsModalOpen(true);
+  };
+
+  const handleOpenSchedulePlace = (item: ScheduleItem) => {
+    const place =
+      getPlaceById(data.places, item.placeId) ?? scheduleItemToPlace(item);
+    openPlace(place);
+  };
+
+  const handleOpenPlaceFromGap = (place: GapRecommendedPlace, gap: DayGap) => {
+    if (!selectedDay) return;
+
+    openPlace(place, {
+      schedulePrefill: {
+        date: selectedDay.date,
+        time: suggestTimeInGap(gap),
+        placeId: place.id,
+      },
+      distanceMeters: place.distanceMeters,
+      walkingMinutes: place.walkingMinutes,
+    });
+  };
+
+  const handleOpenDayRoute = () => {
+    if (!selectedDay) return;
+    const url = buildDayRouteUrl(selectedDay.items);
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
   const selectedDay =
     dayTabs.find((day) => day.date === selectedDate) ?? dayTabs[0];
 
-  return (
-    <div className="p-6">
-      <h2 className="text-lg font-semibold">일정</h2>
-      <p className="mt-2 text-sm text-[#6e6e73]">
-        {trip.startDate} ~ {trip.endDate} ({trip.duration})
-      </p>
+  const dayRouteItems = selectedDay ? getDayRouteItems(selectedDay.items) : [];
+  const canShowDayRoute = dayRouteItems.length > 0;
+  const dayGaps = useMemo(
+    () => (selectedDay ? analyzeDayGaps(selectedDay.items) : []),
+    [selectedDay],
+  );
 
-      <button
-        type="button"
-        onClick={openCreateModal}
-        className="mt-4 w-full rounded-xl bg-[#0A84FF] py-3 text-sm font-semibold text-white"
-      >
-        일정 추가
-      </button>
+  const daySummary = useMemo(() => {
+    if (!selectedDay) return null;
+
+    const items = selectedDay.items;
+    const scheduleCount = items.length;
+    const placeCount = new Set(
+      items.map((item) => item.placeId).filter(Boolean),
+    ).size;
+    const dayExpenses = data.expenses.filter(
+      (expense) => expense.date === selectedDay.date,
+    );
+    const expenseTotal = dayExpenses.reduce(
+      (sum, expense) => sum + expense.amount,
+      0,
+    );
+    const currencyCode = tripHasExchangeRate(trip) ? trip.currency : "KRW";
+    const expenseLabel = formatExpenseAmount(expenseTotal, currencyCode);
+    const favoriteCount = items.filter(
+      (item) => item.placeId && favoriteIds.has(item.placeId),
+    ).length;
+
+    return {
+      scheduleCount,
+      placeCount,
+      expenseLabel,
+      favoriteCount,
+    };
+  }, [selectedDay, data.expenses, trip, favoriteIds]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <Text variant="title-sm" as="h2">
+          일정
+        </Text>
+        <Button type="button" onClick={openCreateModal} size="sm" className="shrink-0">
+          <Plus className="h-4 w-4" aria-hidden />
+          추가
+        </Button>
+      </div>
 
       {dayTabs.length === 0 ? (
-        <p className="mt-6 text-sm text-[#6e6e73]">
+        <Text variant="muted" className="py-6 text-center">
           아직 등록된 일정이 없습니다.
-        </p>
+        </Text>
       ) : (
-        <div className="mt-6">
-          <div className="flex flex-wrap gap-2">
-            {dayTabs.map((day) => {
-              const isSelected = selectedDay?.date === day.date;
+        <>
+          <div
+            ref={dayChipsRef}
+            className="sticky-layer-day-chips -mx-4 border-b border-border bg-background/95 px-4 py-2 backdrop-blur-md sm:-mx-5 sm:px-5"
+          >
+            <div className="scrollbar-hide overflow-x-auto">
+              <div className="flex w-max gap-2">
+                {dayTabs.map((day) => {
+                  const isSelected = selectedDay?.date === day.date;
 
-              return (
-                <button
-                  key={day.date}
-                  type="button"
-                  onClick={() => setSelectedDate(day.date)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                    isSelected
-                      ? "bg-[#0A84FF] text-white"
-                      : "border border-[#ebebeb] bg-white text-[#111111] dark:border-white/20 dark:bg-white/[0.05] dark:text-white"
-                  }`}
-                >
-                  {day.label} ({day.items.length})
-                </button>
-              );
-            })}
+                  return (
+                    <Chip
+                      key={day.date}
+                      active={isSelected}
+                      onClick={() => setSelectedDate(day.date)}
+                      className="min-w-[4.5rem] flex-col gap-0.5 px-3 py-2 transition-all duration-200"
+                    >
+                      <span className="text-xs font-semibold leading-none">
+                        DAY{day.dayNumber}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[11px] leading-none",
+                          isSelected ? "text-white/85" : "text-muted",
+                        )}
+                      >
+                        {day.chipDate}
+                      </span>
+                    </Chip>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
-          {selectedDay && (
-            <section className="mt-6">
-              <h3 className="text-sm font-semibold text-[#6e6e73]">
-                {selectedDay.label} · {formatScheduleDate(selectedDay.date)}
-              </h3>
+          <div
+            ref={subviewTabsRef}
+            className="sticky-layer-schedule-subview -mx-4 border-b border-border bg-background/95 px-4 py-2 backdrop-blur-md sm:-mx-5 sm:px-5"
+          >
+            <ScheduleDaySubviewTabs
+              activeView={activeSubview}
+              onChange={setActiveSubview}
+            />
+          </div>
 
-              {selectedDay.items.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-[#ebebeb] bg-white p-5 text-center dark:border-white/10 dark:bg-white/[0.05]">
-                  <p className="text-sm text-[#6e6e73]">
-                    등록된 일정이 없습니다.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={openCreateModal}
-                    className="mt-4 rounded-xl bg-[#0A84FF] px-4 py-2.5 text-sm font-semibold text-white"
-                  >
-                    + 일정 추가
-                  </button>
-                </div>
-              ) : (
-                <ul className="mt-3 space-y-2" role="list">
-                  {selectedDay.items.map((item) => (
-                    <li key={item.id}>
-                      <div className="rounded-xl border border-[#ebebeb] bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.05]">
-                        <button
+          {selectedDay && daySummary && (
+            <div key={selectedDay.date} className="animate-slide-up space-y-3">
+              <DaySummaryCard
+                scheduleCount={daySummary.scheduleCount}
+                placeCount={daySummary.placeCount}
+                expenseLabel={daySummary.expenseLabel}
+                favoriteCount={daySummary.favoriteCount}
+              />
+
+              <div
+                key={`${selectedDay.date}-${activeSubview}`}
+                className="scroll-margin-sticky animate-fade-in"
+              >
+                {activeSubview === "schedule" && (
+                  <>
+                    {selectedDay.items.length === 0 ? (
+                      <Card padding="lg" className="text-center">
+                        <Text variant="muted">아직 일정이 없습니다.</Text>
+                        <Button
                           type="button"
-                          onClick={() => openEditModal(item)}
-                          className="w-full text-left"
+                          onClick={openCreateModal}
+                          size="sm"
+                          className="mt-4"
                         >
-                          <p className="text-sm font-semibold text-[#111111] dark:text-white">
-                            {item.time}
-                          </p>
-                          <p className="mt-1 text-base text-[#111111] dark:text-white">
-                            {item.title}
-                          </p>
-                          {item.memo && (
-                            <p className="mt-1 text-sm text-[#6e6e73]">{item.memo}</p>
-                          )}
-                        </button>
-                        {item.placeName.trim() && (
-                          <div className="mt-2">
-                            <p className="text-sm text-[#6e6e73]">
-                              📍 {item.placeName}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void openDirectionsForScheduleItem(item);
-                              }}
-                              className="mt-1 text-sm font-medium text-[#0A84FF] hover:underline"
-                            >
-                              🧭 길찾기
-                            </button>
-                          </div>
-                        )}
+                          <Plus className="h-4 w-4" aria-hidden />
+                          일정 추가
+                        </Button>
+                      </Card>
+                    ) : (
+                      <ul className="space-y-0" role="list">
+                        {selectedDay.items.map((item, index) => {
+                          const place = getPlaceById(data.places, item.placeId);
+
+                          return (
+                            <ScheduleItemCard
+                              key={item.id}
+                              item={item}
+                              category={place?.category ?? "other"}
+                              isLast={index === selectedDay.items.length - 1}
+                              onEdit={() => openEditModal(item)}
+                              onOpenPlace={() => handleOpenSchedulePlace(item)}
+                            />
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </>
+                )}
+
+                {activeSubview === "route" && (
+                  <>
+                    {!canShowDayRoute ? (
+                      <Card padding="lg" className="text-center">
+                        <Route
+                          className="mx-auto h-8 w-8 text-muted"
+                          aria-hidden
+                        />
+                        <Text variant="muted" className="mt-3">
+                          장소가 등록된 일정이 없습니다.
+                        </Text>
+                        <Text variant="caption" className="mt-1">
+                          일정에 장소를 연결하면 경로를 확인할 수 있습니다.
+                        </Text>
+                      </Card>
+                    ) : (
+                      <div className="space-y-4">
+                        <Card padding="md">
+                          <Text variant="body-medium" className="font-semibold">
+                            Day 경로
+                          </Text>
+                          <Text variant="muted" className="mt-1">
+                            {dayRouteItems.length}개 장소 · 시간순 경유
+                          </Text>
+
+                          <ol className="mt-4 space-y-3" role="list">
+                            {dayRouteItems.map((item, index) => (
+                              <li
+                                key={item.id}
+                                className="flex items-start gap-3"
+                              >
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                                  {index + 1}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <Text variant="muted" className="text-xs">
+                                    {item.time}
+                                  </Text>
+                                  <Text variant="body-medium" className="font-medium">
+                                    {item.placeName}
+                                  </Text>
+                                </div>
+                              </li>
+                            ))}
+                          </ol>
+                        </Card>
+
+                        <Button
+                          type="button"
+                          onClick={handleOpenDayRoute}
+                          className="w-full"
+                        >
+                          <MapIcon className="h-4 w-4" aria-hidden />
+                          Google Maps에서 경로 보기
+                        </Button>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+                    )}
+                  </>
+                )}
+
+                {activeSubview === "recommend" && (
+                  <>
+                    {selectedDay.items.length < 2 ? (
+                      <Card padding="lg" className="text-center">
+                        <Text variant="muted">
+                          일정이 2개 이상 등록되면 빈 시간 추천을 확인할 수
+                          있습니다.
+                        </Text>
+                      </Card>
+                    ) : dayGaps.length === 0 ? (
+                      <Card padding="lg" className="text-center">
+                        <Text variant="muted">
+                          이 날짜에 추천할 빈 시간이 없습니다.
+                        </Text>
+                      </Card>
+                    ) : (
+                      <DayGapSection
+                        dayItems={selectedDay.items}
+                        places={data.places}
+                        onOpenPlace={handleOpenPlaceFromGap}
+                        className="mt-0"
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       <ScheduleModal
         isOpen={isModalOpen}
         editingItem={editingItem}
+        places={data.places}
+        defaultDate={selectedDate}
+        initialForm={gapPrefill ?? undefined}
         onClose={closeModal}
         onSave={handleSave}
+        onAddPlace={handleAddPlace}
         onDelete={handleDelete}
+      />
+
+      <PlaceActionSheet
+        previewState={previewState}
+        onClose={closePlace}
+        isFavorite={isFavorite}
+        onToggleFavorite={toggleFavorite}
+        getPlace={getPlaceFromData}
+        onSaveTravelRecord={handleSaveTravelRecord}
+        onAddToSchedule={handleAddToScheduleFromSheet}
       />
     </div>
   );
 }
 
-/**
- * 일정 탭 — TripDetailData.events / places 사용
- */
+/** 일정 탭 — TripDetailData.events / places 사용 */
 export default function ScheduleTab({ trip }: ScheduleTabProps) {
   return <ScheduleTabContent trip={trip} />;
 }

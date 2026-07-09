@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Note } from "@/types/note";
 import { formatNoteDate } from "@/lib/note-utils";
+import { Button, Card, Text } from "@/components/ui";
 
 interface MemoItemProps {
   note: Note;
@@ -20,7 +22,7 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
       : "내용 없음";
 
   return (
-    <article className="rounded-xl border border-[#ebebeb] bg-white dark:border-white/10 dark:bg-white/[0.05]">
+    <Card padding="none">
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -28,52 +30,59 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
         aria-expanded={isOpen}
       >
         <div className="min-w-0 flex-1">
-          <h3 className="text-base font-semibold text-[#111111] dark:text-white">
+          <Text variant="body-medium" as="h3" className="text-base font-semibold">
             {note.title}
-          </h3>
+          </Text>
           {!isOpen && (
-            <p className="mt-1 truncate text-sm text-[#6e6e73]">{preview}</p>
+            <Text variant="muted" className="mt-1 truncate">
+              {preview}
+            </Text>
           )}
-          <p className="mt-1 text-xs text-[#6e6e73]">
+          <Text variant="caption" className="mt-1">
             {formatNoteDate(note.updatedAt)}
-          </p>
+          </Text>
         </div>
-        <span className="shrink-0 pt-1 text-sm text-[#6e6e73]" aria-hidden>
-          {isOpen ? "▲" : "▼"}
-        </span>
+        {isOpen ? (
+          <ChevronUp className="h-4 w-4 shrink-0 pt-1 text-muted" aria-hidden />
+        ) : (
+          <ChevronDown className="h-4 w-4 shrink-0 pt-1 text-muted" aria-hidden />
+        )}
       </button>
 
       {isOpen && (
-        <div className="border-t border-[#ebebeb] px-4 py-3 dark:border-white/10">
+        <div className="border-t border-border px-4 py-3">
           {note.content.trim() ? (
-            <p className="whitespace-pre-wrap text-sm text-[#111111] dark:text-white">
+            <Text variant="body" className="whitespace-pre-wrap">
               {note.content}
-            </p>
+            </Text>
           ) : (
-            <p className="text-sm text-[#6e6e73]">내용이 없습니다.</p>
+            <Text variant="muted">내용이 없습니다.</Text>
           )}
 
           <div className="mt-4 flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => onEdit(note)}
-              className="rounded-lg border border-[#ebebeb] px-3 py-2 text-sm text-[#111111] dark:border-white/20 dark:text-white"
             >
               수정
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 if (!confirm("이 메모를 삭제할까요?")) return;
                 onDelete(note.id);
               }}
-              className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-500 dark:border-red-500/30"
+              className="border-danger/30 text-danger"
             >
               삭제
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </article>
+    </Card>
   );
 }

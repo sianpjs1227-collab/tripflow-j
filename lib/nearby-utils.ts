@@ -1,5 +1,6 @@
 import type { Place, PlaceCategory } from "@/types/place";
-import { getPlaceCoordinates, type GeoPosition } from "@/lib/directions";
+import type { GeoPosition } from "@/lib/directions";
+import { placeHasStoredCoordinates } from "@/lib/place-utils";
 
 /** 내 주변 추천 카테고리 표시 순서 */
 export const nearbyCategoryOrder: PlaceCategory[] = [
@@ -75,9 +76,12 @@ export function getNearbyPlaces(
   const results: NearbyPlace[] = [];
 
   for (const place of places) {
-    const coords = getPlaceCoordinates(place);
-    if (!coords) continue;
+    if (!placeHasStoredCoordinates(place)) continue;
 
+    const coords: GeoPosition = {
+      latitude: place.latitude!,
+      longitude: place.longitude!,
+    };
     const distanceMeters = calculateDistanceMeters(origin, coords);
     if (maxDistance != null && distanceMeters > maxDistance) continue;
 

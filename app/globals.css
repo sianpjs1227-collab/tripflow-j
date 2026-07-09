@@ -1,34 +1,107 @@
 @import "tailwindcss";
 
-/* 시스템 다크모드 설정을 Tailwind dark: 접두사에 연결 */
-@variant dark (@media (prefers-color-scheme: dark));
-
 /* ─────────────────────────────────────────
-   TripFlow J — 디자인 토큰
+   TripFlow J — Light Theme Design Tokens
    ───────────────────────────────────────── */
 
 @theme inline {
-  --color-background: #f5f5f7;
-  --color-foreground: #1d1d1f;
-  --color-muted: #6e6e73;
-  --color-accent: #0071e3;
-  --color-accent-hover: #0077ed;
-  --color-accent-muted: #2997ff;
+  --color-primary: #3b82f6;
+  --color-background: #f8fafc;
   --color-card: #ffffff;
-  --color-card-border: rgb(0 0 0 / 0.06);
-  --color-card-border-hover: rgb(0 0 0 / 0.1);
+  --color-border: #e5e7eb;
+  --color-foreground: #111827;
+  --color-muted: #6b7280;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  --color-accent: var(--color-primary);
+  --color-accent-hover: #2563eb;
+  --color-card-border: var(--color-border);
+
   --font-sans: var(--font-noto-sans-kr), -apple-system, BlinkMacSystemFont,
     "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+  --z-index-sticky-day: 10;
+  --z-index-sticky-subview: 12;
+  --z-index-sticky-tab: 15;
+  --z-index-sticky-header: 20;
+  --z-index-overlay: 90;
+  --z-index-dialog: 100;
 }
 
-/* ─────────────────────────────────────────
-   기본 스타일
-   ───────────────────────────────────────── */
+:root {
+  --sticky-header-height: 0px;
+  --sticky-trip-tabs-height: 0px;
+  --sticky-day-chips-height: 0px;
+  --sticky-schedule-subview-height: 0px;
+
+  --sticky-top-trip-tabs: var(--sticky-header-height);
+  --sticky-top-day-chips: calc(
+    var(--sticky-header-height) + var(--sticky-trip-tabs-height)
+  );
+  --sticky-top-schedule-subview: calc(
+    var(--sticky-header-height) + var(--sticky-trip-tabs-height) +
+      var(--sticky-day-chips-height)
+  );
+  --sticky-stack-total: calc(
+    var(--sticky-header-height) + var(--sticky-trip-tabs-height) +
+      var(--sticky-day-chips-height) + var(--sticky-schedule-subview-height)
+  );
+
+  --page-padding-x: 1rem;
+  --section-gap: 1rem;
+  --card-gap: 0.75rem;
+  --sheet-duration: 300ms;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --page-padding-x: 1.25rem;
+  }
+}
+
+html {
+  color-scheme: light;
+}
 
 body {
   font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.scroll-margin-sticky {
+  scroll-margin-top: var(--sticky-stack-total);
+}
+
+.sticky-layer-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-index-sticky-header);
+}
+
+.sticky-layer-trip-tabs {
+  position: sticky;
+  top: var(--sticky-top-trip-tabs);
+  z-index: var(--z-index-sticky-tab);
+}
+
+.sticky-layer-day-chips {
+  position: sticky;
+  top: var(--sticky-top-day-chips);
+  z-index: var(--z-index-sticky-day);
+}
+
+.sticky-layer-schedule-subview {
+  position: sticky;
+  top: var(--sticky-top-schedule-subview);
+  z-index: var(--z-index-sticky-subview);
 }
 
 /* ─────────────────────────────────────────
@@ -64,8 +137,89 @@ body {
   font-style: normal;
 }
 
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-down {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out both;
+}
+
+.animate-fade-out {
+  animation: fade-out var(--sheet-duration) ease-in both;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out both;
+}
+
+.animate-sheet-up {
+  animation: sheet-up var(--sheet-duration) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-sheet-down {
+  animation: sheet-down var(--sheet-duration) cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-in-up {
+  .animate-fade-in-up,
+  .animate-fade-in,
+  .animate-fade-out,
+  .animate-slide-up,
+  .animate-sheet-up,
+  .animate-sheet-down {
     animation: none;
     opacity: 1;
     transform: none;

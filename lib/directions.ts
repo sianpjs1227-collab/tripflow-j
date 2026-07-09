@@ -1,5 +1,10 @@
 import type { Place } from "@/types/place";
-import { getGoogleMapsUrlForPlace } from "@/lib/place-utils";
+import {
+  getGoogleMapsUrlForPlace,
+  getPlaceSearchQuery,
+  placeHasStoredCoordinates,
+} from "@/lib/place-utils";
+import { extractCoordsFromMapsLink } from "@/lib/maps-link-parser";
 
 export interface GeoPosition {
   latitude: number;
@@ -39,35 +44,13 @@ export function getCurrentPosition(): Promise<GeoPosition> {
 function parseCoordsFromMapsLink(
   mapsLink: string,
 ): GeoPosition | null {
-  try {
-    const url = new URL(
-      mapsLink.startsWith("http") ? mapsLink : `https://${mapsLink}`,
-    );
-    const query = url.searchParams.get("query");
-    if (!query) return null;
-
-    const match = query.trim().match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
-    if (!match) return null;
-
-    const latitude = Number.parseFloat(match[1]);
-    const longitude = Number.parseFloat(match[2]);
-    if (Number.isNaN(latitude) || Number.isNaN(longitude)) return null;
-
-    return { latitude, longitude };
-  } catch {
-    return null;
-  }
+  return extractCoordsFromMapsLink(mapsLink);
 }
 
-/** Place 에서 목적지 좌표 조회 */
+/** Place 에서 목적지 좌표 조회 (저장된 좌표 우선, 링크 파싱 보조) */
 export function getPlaceCoordinates(place: Place): GeoPosition | null {
-  if (
-    place.latitude != null &&
-    place.longitude != null &&
-    !Number.isNaN(place.latitude) &&
-    !Number.isNaN(place.longitude)
-  ) {
-    return { latitude: place.latitude, longitude: place.longitude };
+  if (placeHasStoredCoordinates(place)) {
+    return { latitude: place.latitude!, longitude: place.longitude! };
   }
 
   if (place.mapsLink?.trim()) {
@@ -125,10 +108,11 @@ export async function openDirectionsToPlace(
 ): Promise<void> {
   const fallbackUrl = getGoogleMapsUrlForPlace(place);
   const coords = getPlaceCoordinates(place);
+  const searchQuery = getPlaceSearchQuery(place);
   const destination: DirectionsTarget = {
     latitude: coords?.latitude,
     longitude: coords?.longitude,
-    name: place.name.trim() || undefined,
+    name: searchQuery || place.name.trim() || undefined,
   };
 
   if (!coords && !destination.name) {

@@ -1,7 +1,7 @@
 /**
- * 여행의 진행 상태를 나타내는 타입
+ * 여행 라이프사이클 상태 (Supabase Trip.status)
  */
-export type TripStatus = "planning" | "preparing" | "completed";
+export type TripStatus = "PLANNING" | "TRAVELING" | "COMPLETED";
 
 /**
  * 여행 상세 페이지 탭 종류
@@ -39,6 +39,14 @@ export interface Trip {
   /** 숙박 일수 (예: 3박4일) */
   duration: string;
   status: TripStatus;
+  /** true 이면 status 를 자동 계산하지 않음 */
+  statusIsManual?: boolean;
+  /** 여행 기본 통화 (예: JPY, USD, KRW) */
+  currency: string;
+  /** 1 외화 = N KRW — null 이면 원화(KRW) 여행 */
+  exchangeRate: number | null;
+  /** 커버 이미지 (data URL, 선택) */
+  coverImage?: string;
 }
 
 /** 새 여행 입력 폼 데이터 */
@@ -50,4 +58,10 @@ export interface CreateTripInput {
   city: string;
   startDate: string;
   endDate: string;
+  /** 1 기본통화 = N KRW (선택, 폼 입력용 문자열) */
+  exchangeRate: string;
+  /** 커버 이미지 (data URL, 선택) */
+  coverImage?: string;
+  /** 새 여행 생성 시 기본 체크리스트 포함 (기본값 true) */
+  includeDefaultChecklist?: boolean;
 }

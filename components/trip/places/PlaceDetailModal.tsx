@@ -1,15 +1,21 @@
 "use client";
 
+import { CalendarPlus, Navigation, Star } from "lucide-react";
 import type { Place } from "@/types/place";
 import {
+  openGoogleMapsForPlace,
   placeCategoryIcons,
   placeCategoryLabels,
-  truncateMemo,
+  placeHasMaps,
 } from "@/lib/place-utils";
 import { openDirectionsToPlace } from "@/lib/directions";
+import { Button, OverlayLayer, Text } from "@/components/ui";
+import { cn } from "@/lib/cn";
 
 interface PlaceDetailModalProps {
   place: Place | null;
+  isFavorite: boolean;
+  onToggleFavorite: (placeId: string) => void;
   onClose: () => void;
   onAddToSchedule: (place: Place) => void;
   onEdit: (place: Place) => void;
@@ -19,16 +25,14 @@ interface PlaceDetailModalProps {
 /** 장소 상세 — 액션 버튼 제공 */
 export default function PlaceDetailModal({
   place,
+  isFavorite,
+  onToggleFavorite,
   onClose,
   onAddToSchedule,
   onEdit,
   onDelete,
 }: PlaceDetailModalProps) {
   if (!place) return null;
-
-  const handleDirections = () => {
-    void openDirectionsToPlace(place);
-  };
 
   const handleDelete = () => {
     if (!confirm(`"${place.name}" 장소를 삭제할까요?`)) return;
@@ -37,108 +41,115 @@ export default function PlaceDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/40"
-        onClick={onClose}
-        aria-label="모달 닫기"
-      />
-
-      <div className="relative z-10 w-full max-w-lg rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl dark:bg-[#1c1c1e]">
+    <OverlayLayer
+      onClose={onClose}
+      closeLabel="모달 닫기"
+      panelClassName="bg-card p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+    >
         <div className="flex items-start gap-3">
           <span className="text-2xl" aria-hidden>
             {placeCategoryIcons[place.category]}
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-bold text-[#111111] dark:text-white">
+            <Text variant="title-sm" as="h2" className="text-xl font-bold">
               {place.name}
-            </h2>
-            <p className="mt-1 text-sm text-[#6e6e73]">
+            </Text>
+            <Text variant="muted" className="mt-1">
               {placeCategoryLabels[place.category]}
-            </p>
+            </Text>
             {place.memo && (
-              <p className="mt-2 text-sm text-[#6e6e73]">{place.memo}</p>
+              <Text variant="muted" className="mt-2">
+                {place.memo}
+              </Text>
+            )}
+            {place.address && (
+              <Text variant="muted" className="mt-1">
+                {place.address}
+              </Text>
             )}
           </div>
         </div>
 
         <div className="mt-6 space-y-2">
-          <button
+          <Button
             type="button"
-            onClick={handleDirections}
-            className="w-full rounded-xl border border-[#ebebeb] py-3 text-sm font-medium text-[#0A84FF] dark:border-white/20"
+            variant="secondary"
+            onClick={() => onToggleFavorite(place.id)}
+            className={cn(
+              "w-full",
+              isFavorite &&
+                "border-warning/30 bg-warning/10 text-warning hover:bg-warning/15",
+            )}
+            aria-pressed={isFavorite}
           >
-            🧭 길찾기
-          </button>
-          <button
+            <Star
+              className={cn("h-4 w-4 shrink-0", isFavorite && "fill-current")}
+              aria-hidden
+            />
+            즐겨찾기
+          </Button>
+          {placeHasMaps(place) && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => openGoogleMapsForPlace(place)}
+              className="w-full text-primary"
+            >
+              Google Maps에서 보기
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              void openDirectionsToPlace(place);
+            }}
+            className="w-full text-primary"
+          >
+            <Navigation className="h-4 w-4 shrink-0" aria-hidden />
+            길찾기
+          </Button>
+          <Button
             type="button"
             onClick={() => {
               onAddToSchedule(place);
             }}
-            className="w-full rounded-xl bg-[#0A84FF] py-3 text-sm font-semibold text-white"
+            className="w-full"
           >
+            <CalendarPlus className="h-4 w-4 shrink-0" aria-hidden />
             일정에 추가
-          </button>
-          <button
+          </Button>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => {
               onEdit(place);
             }}
-            className="w-full rounded-xl border border-[#ebebeb] py-3 text-sm font-medium text-[#111111] dark:border-white/20 dark:text-white"
+            className="w-full"
           >
             수정
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
             onClick={handleDelete}
-            className="w-full rounded-xl border border-red-200 py-3 text-sm font-medium text-red-500 dark:border-red-500/30"
+            className="w-full border-danger/30 text-danger"
           >
             삭제
-          </button>
+          </Button>
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={onClose}
-          className="mt-4 w-full py-2 text-sm text-[#6e6e73] hover:underline"
+          className="mt-4 w-full text-muted"
         >
           닫기
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** 장소 카드 (목록용) */
-export function PlaceCard({
-  place,
-  onClick,
-}: {
-  place: Place;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full rounded-xl border border-[#ebebeb] bg-white px-4 py-3 text-left transition-colors hover:border-[#0A84FF]/30 dark:border-white/10 dark:bg-white/[0.05]"
-    >
-      <div className="flex items-start gap-3">
-        <span className="text-xl leading-none" aria-hidden>
-          {placeCategoryIcons[place.category]}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-base font-semibold text-[#111111] dark:text-white">
-            {place.name}
-          </p>
-          {place.memo && (
-            <p className="mt-1 truncate text-sm text-[#6e6e73]">
-              {truncateMemo(place.memo)}
-            </p>
-          )}
-        </div>
-      </div>
-    </button>
+        </Button>
+    </OverlayLayer>
   );
 }

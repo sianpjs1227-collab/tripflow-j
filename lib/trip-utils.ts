@@ -1,11 +1,17 @@
 import {
   getCountryByCode,
   getCountryByName,
+  getCurrencyCodeByCountryCode,
   getCountryFlag,
   resolveCountryCode,
   resolveCountryName,
 } from "@/data/countries";
-import type { Trip, TripStatus } from "@/types/trip";
+import type { Trip } from "@/types/trip";
+import { parseExchangeRateInput } from "@/lib/currency-utils";
+import {
+  computeAutoTripStatus,
+  resolveTripStatus,
+} from "@/lib/trip-lifecycle";
 
 /** ISO 날짜(YYYY-MM-DD)를 화면 표시용(YYYY.MM.DD)으로 변환 */
 export function formatDisplayDate(isoDate: string): string {
@@ -23,15 +29,46 @@ export function calculateDuration(startIso: string, endIso: string): string {
   return `${nights}박${days}일`;
 }
 
-/** 고유 ID 생성 */
+/** 고유 ID 생성 (LocalStorage 모드) */
 export function generateTripId(): string {
   return `trip-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** UUID 생성 (Supabase 모드) */
+export function generateTripUuid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return generateTripId();
 }
 
 type LegacyTrip = Trip & {
   city?: string;
   countryEmoji?: string;
+  baseCurrency?: string;
+  exchangeRateToKrw?: number;
+  statusIsManual?: boolean;
+  coverImage?: string;
 };
+
+function resolveTripCurrencyFields(
+  countryCode: string,
+  rawCurrency?: string,
+  rawRate?: number | null,
+): { currency: string; exchangeRate: number | null } {
+  const currency =
+    rawCurrency?.trim().toUpperCase() ||
+    getCurrencyCodeByCountryCode(countryCode);
+
+  if (currency === "KRW") {
+    return { currency: "KRW", exchangeRate: null };
+  }
+
+  const rate =
+    rawRate != null && !Number.isNaN(rawRate) && rawRate > 0 ? rawRate : null;
+
+  return { currency, exchangeRate: rate };
+}
 
 /** localStorage 에서 불러온 여행 데이터 정규화 */
 export function normalizeTrip(raw: LegacyTrip): Trip {
@@ -46,6 +83,21 @@ export function normalizeTrip(raw: LegacyTrip): Trip {
   const city = raw.city?.trim() || raw.name?.trim() || "";
   const name = raw.name?.trim() || city;
 
+  const legacyCurrency = raw.currency ?? raw.baseCurrency;
+  const legacyRate = raw.exchangeRate ?? raw.exchangeRateToKrw ?? null;
+  const { currency, exchangeRate } = resolveTripCurrencyFields(
+    countryCode,
+    legacyCurrency,
+    legacyRate,
+  );
+  const statusIsManual = raw.statusIsManual ?? false;
+  const status = resolveTripStatus(
+    raw.startDate,
+    raw.endDate,
+    raw.status,
+    statusIsManual,
+  );
+
   return {
     id: raw.id,
     name,
@@ -56,7 +108,11 @@ export function normalizeTrip(raw: LegacyTrip): Trip {
     startDate: raw.startDate,
     endDate: raw.endDate,
     duration: raw.duration,
-    status: raw.status,
+    status,
+    statusIsManual,
+    currency,
+    exchangeRate,
+    coverImage: raw.coverImage || undefined,
   };
 }
 
@@ -66,11 +122,17 @@ function resolveTripFields(input: {
   city: string;
   startDate: string;
   endDate: string;
+  exchangeRate: string;
+  coverImage?: string;
 }) {
   const code = input.countryCode.trim().toUpperCase();
   const country = getCountryByCode(code);
   const city = input.city.trim();
   const name = input.name.trim() || city;
+  const currency = getCurrencyCodeByCountryCode(code);
+  const parsedRate = parseExchangeRateInput(input.exchangeRate);
+  const exchangeRate =
+    currency === "KRW" ? null : (parsedRate ?? null);
 
   return {
     name,
@@ -81,22 +143,36 @@ function resolveTripFields(input: {
     startDate: formatDisplayDate(input.startDate),
     endDate: formatDisplayDate(input.endDate),
     duration: calculateDuration(input.startDate, input.endDate),
+    currency,
+    exchangeRate,
+    coverImage: input.coverImage?.trim() || undefined,
   };
 }
 
 /** 새 여행 객체 생성 */
-export function createTrip(input: {
-  name: string;
-  countryCode: string;
-  city: string;
-  startDate: string;
-  endDate: string;
-  status?: TripStatus;
-}): Trip {
+export function createTrip(
+  input: {
+    name: string;
+    countryCode: string;
+    city: string;
+    startDate: string;
+    endDate: string;
+    exchangeRate: string;
+    coverImage?: string;
+  },
+  options?: { id?: string; useUuid?: boolean },
+): Trip {
+  const fields = resolveTripFields(input);
+  const status = computeAutoTripStatus(fields.startDate, fields.endDate);
+  const id =
+    options?.id ??
+    (options?.useUuid ? generateTripUuid() : generateTripId());
+
   return {
-    id: generateTripId(),
-    ...resolveTripFields(input),
-    status: input.status ?? "planning",
+    id,
+    ...fields,
+    status,
+    statusIsManual: false,
   };
 }
 
@@ -117,11 +193,37 @@ export function updateTrip(
     city: string;
     startDate: string;
     endDate: string;
+    exchangeRate: string;
+    coverImage?: string;
   },
 ): Trip {
+  const fields = resolveTripFields(input);
+  const parsedRate = parseExchangeRateInput(input.exchangeRate);
+
+  let exchangeRate = fields.exchangeRate;
+  if (fields.currency === "KRW") {
+    exchangeRate = null;
+  } else if (parsedRate != null) {
+    exchangeRate = parsedRate;
+  } else if (fields.countryCode === existing.countryCode) {
+    exchangeRate = existing.exchangeRate;
+  }
+
+  const statusIsManual = existing.statusIsManual ?? false;
+  const status = statusIsManual
+    ? existing.status
+    : computeAutoTripStatus(fields.startDate, fields.endDate);
+
   return {
     ...existing,
-    ...resolveTripFields(input),
+    ...fields,
+    exchangeRate,
+    status,
+    statusIsManual,
+    coverImage:
+      input.coverImage !== undefined
+        ? input.coverImage.trim() || undefined
+        : existing.coverImage,
   };
 }
 

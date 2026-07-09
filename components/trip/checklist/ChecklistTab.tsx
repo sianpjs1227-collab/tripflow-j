@@ -1,34 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ChecklistInput, ChecklistItem } from "@/types/checklist";
+import type { DefaultChecklistEntry } from "@/lib/default-checklist";
 import { useTripDetail } from "@/contexts/TripDetailContext";
 import {
   createChecklistItem,
+  createChecklistItemFromDefault,
+  groupChecklistByCategory,
   updateChecklistItem,
 } from "@/lib/checklist-utils";
+import { Button, Text } from "@/components/ui";
 import ChecklistModal from "./ChecklistModal";
+import ChecklistAddOptionsModal from "./ChecklistAddOptionsModal";
+import ChecklistDefaultPickerModal from "./ChecklistDefaultPickerModal";
+import ChecklistCategorySection from "./ChecklistCategorySection";
 
 function ChecklistTabContent() {
   const { data, updateData } = useTripDetail();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddOptionsOpen, setIsAddOptionsOpen] = useState(false);
+  const [isDefaultPickerOpen, setIsDefaultPickerOpen] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
 
   const items = data.checklist;
   const checkedCount = items.filter((item) => item.checked).length;
+  const groupedItems = useMemo(() => groupChecklistByCategory(items), [items]);
 
-  const openCreateModal = () => {
+  const openAddOptions = () => {
     setEditingItem(null);
-    setIsModalOpen(true);
+    setIsAddOptionsOpen(true);
   };
 
   const openEditModal = (item: ChecklistItem) => {
     setEditingItem(item);
-    setIsModalOpen(true);
+    setIsManualModalOpen(true);
   };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
+  const closeManualModal = () => {
+    setIsManualModalOpen(false);
     setEditingItem(null);
   };
 
@@ -52,6 +62,16 @@ function ChecklistTabContent() {
     });
   };
 
+  const handleAddDefaults = (entries: DefaultChecklistEntry[]) => {
+    updateData((prev) => ({
+      ...prev,
+      checklist: [
+        ...prev.checklist,
+        ...entries.map(createChecklistItemFromDefault),
+      ],
+    }));
+  };
+
   const handleDelete = (id: string) => {
     updateData((prev) => ({
       ...prev,
@@ -69,74 +89,57 @@ function ChecklistTabContent() {
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-lg font-semibold">체크리스트</h2>
+    <div className="space-y-4">
+      <Text variant="title-sm" as="h2">
+        체크리스트
+      </Text>
       {items.length > 0 && (
-        <p className="mt-2 text-sm text-[#6e6e73]">
+        <Text variant="muted" className="mt-2">
           {checkedCount}/{items.length} 완료
-        </p>
+        </Text>
       )}
 
-      <button
-        type="button"
-        onClick={openCreateModal}
-        className="mt-4 w-full rounded-xl bg-[#0A84FF] py-3 text-sm font-semibold text-white"
-      >
+      <Button type="button" onClick={openAddOptions} className="w-full">
         항목 추가
-      </button>
+      </Button>
 
       {items.length === 0 ? (
-        <p className="mt-6 text-sm text-[#6e6e73]">
+        <Text variant="muted" className="mt-6">
           아직 등록된 항목이 없습니다.
-        </p>
+        </Text>
       ) : (
-        <ul className="mt-6 space-y-2" role="list">
-          {items.map((item) => (
-            <li
-              key={item.id}
-              className="rounded-xl border border-[#ebebeb] bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.05]"
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={item.checked}
-                  onChange={() => handleToggle(item.id)}
-                  className="h-5 w-5 shrink-0 rounded border-[#ebebeb] accent-[#0A84FF]"
-                  aria-label={`${item.text} 체크`}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => openEditModal(item)}
-                  className={`min-w-0 flex-1 text-left text-base ${
-                    item.checked
-                      ? "text-[#6e6e73] line-through"
-                      : "text-[#111111] dark:text-white"
-                  }`}
-                >
-                  {item.text}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!confirm("이 항목을 삭제할까요?")) return;
-                    handleDelete(item.id);
-                  }}
-                  className="shrink-0 text-sm text-[#6e6e73] hover:text-red-500"
-                >
-                  삭제
-                </button>
-              </div>
-            </li>
+        <div className="mt-6 space-y-2">
+          {groupedItems.map((group) => (
+            <ChecklistCategorySection
+              key={group.category}
+              category={group.category}
+              items={group.items}
+              onToggle={handleToggle}
+              onEdit={openEditModal}
+              onDelete={handleDelete}
+            />
           ))}
-        </ul>
+        </div>
       )}
 
+      <ChecklistAddOptionsModal
+        isOpen={isAddOptionsOpen}
+        onClose={() => setIsAddOptionsOpen(false)}
+        onSelectDefaults={() => setIsDefaultPickerOpen(true)}
+        onSelectManual={() => setIsManualModalOpen(true)}
+      />
+
+      <ChecklistDefaultPickerModal
+        isOpen={isDefaultPickerOpen}
+        existingItems={items}
+        onClose={() => setIsDefaultPickerOpen(false)}
+        onAdd={handleAddDefaults}
+      />
+
       <ChecklistModal
-        isOpen={isModalOpen}
+        isOpen={isManualModalOpen}
         editingItem={editingItem}
-        onClose={closeModal}
+        onClose={closeManualModal}
         onSave={handleSave}
         onDelete={handleDelete}
       />

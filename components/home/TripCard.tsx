@@ -2,9 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  CalendarDays,
+  CheckCircle2,
+  MapPin,
+  MoreVertical,
+  Wallet,
+} from "lucide-react";
 import type { Trip } from "@/types/trip";
-import { tripStatusDisplay } from "@/lib/trip-status";
-import CountryFlag from "@/components/ui/CountryFlag";
+import { isDepartingToday } from "@/lib/trip-lifecycle";
+import {
+  getTravelDayProgress,
+  getTripDisplayName,
+  getTripHomeStats,
+  getTripStatusBadge,
+  tripStatusToneClass,
+} from "@/lib/trip-home-utils";
+import { Button, Card, CountryFlag, Text } from "@/components/ui";
+import TripCover from "./TripCover";
 
 interface TripCardProps {
   trip: Trip;
@@ -13,7 +28,7 @@ interface TripCardProps {
   onDelete: (trip: Trip) => void;
 }
 
-/** 여행 카드 — 클릭 시 상세 이동, ⋮ 메뉴로 수정/삭제 */
+/** 여행 카드 — Cover Image + 통계 */
 export default function TripCard({
   trip,
   index = 0,
@@ -23,6 +38,11 @@ export default function TripCard({
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const showDepartingToday = isDepartingToday(trip.startDate);
+  const stats = getTripHomeStats(trip);
+  const statusBadge = getTripStatusBadge(trip);
+  const progress = getTravelDayProgress(trip);
+  const displayName = getTripDisplayName(trip);
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -43,87 +63,154 @@ export default function TripCard({
 
   const handleDelete = () => {
     setIsMenuOpen(false);
-    if (!confirm(`"${trip.city}" 여행을 삭제할까요?`)) return;
+    if (!confirm(`"${displayName}" 여행을 삭제할까요?`)) return;
     onDelete(trip);
   };
 
   return (
-    <div
-      className="
-        relative w-full rounded-[24px] border border-[#ebebeb] bg-white
-        shadow-[0_2px_16px_rgba(0,0,0,0.05)]
-        transition-all duration-300 ease-out
-        hover:border-[#e0e0e0] hover:shadow-[0_4px_24px_rgba(0,0,0,0.08)]
-        dark:border-white/10 dark:bg-white/[0.08]
-        dark:shadow-[0_2px_16px_rgba(0,0,0,0.3)]
-        dark:hover:border-white/15
-        animate-fade-in-up
-      "
-      style={{ animationDelay: `${(index + 2) * 100}ms` }}
+    <Card
+      className="relative w-full overflow-hidden shadow-sm transition-all duration-300 ease-out hover:shadow-md animate-fade-in-up"
+      style={{ animationDelay: `${(index + 2) * 80}ms` }}
     >
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={handleNavigate}
-        className="w-full p-6 pr-14 text-left active:scale-[1.02] transition-transform"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleNavigate();
+          }
+        }}
+        className="block w-full cursor-pointer text-left"
       >
-        <div className="flex items-start justify-between gap-5">
-          <div className="min-w-0 flex-1">
-            <h3 className="flex items-center gap-2 text-xl font-semibold text-[#111111] dark:text-[#f5f5f7]">
+        <div className="relative">
+          <TripCover trip={trip} />
+
+          <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-sm ${tripStatusToneClass(statusBadge.tone)}`}
+            >
+              {statusBadge.label}
+            </span>
+            {showDepartingToday && (
+              <span className="rounded-full bg-warning/90 px-2.5 py-1 text-xs font-semibold text-white">
+                오늘 출발
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-4 p-4 sm:p-5">
+          <div className="min-w-0 pr-8">
+            <Text variant="title-sm" as="h3" className="text-lg font-bold">
+              {displayName}
+            </Text>
+            <Text variant="muted" className="mt-1 flex items-center gap-1.5">
               <CountryFlag
                 code={trip.countryCode}
-                className="text-2xl"
+                className="text-base"
                 label={trip.country}
               />
-              {trip.city}
-            </h3>
-
-            <p className="mt-2.5 text-sm text-[#6e6e73] dark:text-[#a1a1a6]">
-              {trip.startDate} ~ {trip.endDate}
-            </p>
-
-            <p className="mt-1 text-sm text-[#6e6e73] dark:text-[#a1a1a6]">
-              {trip.duration}
-            </p>
+              {trip.country} · {trip.city}
+            </Text>
+            <Text variant="caption" className="mt-2 block">
+              {trip.startDate} ~ {trip.endDate} · {trip.duration}
+            </Text>
           </div>
 
-          <span className="shrink-0 pt-0.5 text-sm font-medium text-[#111111] dark:text-[#f5f5f7]">
-            {tripStatusDisplay[trip.status]}
-          </span>
-        </div>
-      </button>
+          {progress && statusBadge.tone === "traveling" && (
+            <div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-background">
+                <div
+                  className="h-full rounded-full bg-warning transition-all duration-500"
+                  style={{ width: `${progress.percent}%` }}
+                />
+              </div>
+            </div>
+          )}
 
-      <div ref={menuRef} className="absolute right-4 top-4">
-        <button
-          type="button"
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-xl bg-background px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-muted">
+                <CalendarDays className="h-3.5 w-3.5" aria-hidden />
+                <Text variant="caption">일정</Text>
+              </div>
+              <Text variant="body-medium" className="mt-1 font-semibold">
+                {stats.scheduleCount}
+              </Text>
+            </div>
+            <div className="rounded-xl bg-background px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-muted">
+                <MapPin className="h-3.5 w-3.5" aria-hidden />
+                <Text variant="caption">장소</Text>
+              </div>
+              <Text variant="body-medium" className="mt-1 font-semibold">
+                {stats.placeCount}
+              </Text>
+            </div>
+            <div className="rounded-xl bg-background px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-muted">
+                <Wallet className="h-3.5 w-3.5" aria-hidden />
+                <Text variant="caption">지출</Text>
+              </div>
+              <Text variant="caption" className="mt-1 line-clamp-2 font-semibold text-foreground">
+                {stats.expensePrimary.replace(/^총\s/, "")}
+              </Text>
+            </div>
+            <div className="rounded-xl bg-background px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-muted">
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                <Text variant="caption">준비율</Text>
+              </div>
+              <Text variant="body-medium" className="mt-1 font-semibold">
+                {stats.preparationRate != null
+                  ? `${stats.preparationRate}%`
+                  : "-"}
+              </Text>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        ref={menuRef}
+        className="absolute right-3 top-3 z-10"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setIsMenuOpen((prev) => !prev)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-[#6e6e73] hover:bg-[#f5f5f5] dark:hover:bg-white/10"
+          className="h-8 w-8 bg-black/20 p-0 text-white backdrop-blur-sm hover:bg-black/30"
           aria-label="여행 메뉴"
         >
-          ⋮
-        </button>
+          <MoreVertical className="h-5 w-5" aria-hidden />
+        </Button>
 
         {isMenuOpen && (
-          <div className="absolute right-0 z-10 mt-1 min-w-[120px] overflow-hidden rounded-xl border border-[#ebebeb] bg-white shadow-lg dark:border-white/10 dark:bg-[#1c1c1e]">
+          <Card className="absolute right-0 mt-1 min-w-[120px] overflow-hidden shadow-lg">
             <button
               type="button"
               onClick={() => {
                 setIsMenuOpen(false);
                 onEdit(trip);
               }}
-              className="block w-full px-4 py-3 text-left text-sm text-[#111111] hover:bg-[#f5f5f5] dark:text-white dark:hover:bg-white/10"
+              className="block w-full px-4 py-3 text-left text-sm text-foreground hover:bg-background"
             >
               수정
             </button>
             <button
               type="button"
               onClick={handleDelete}
-              className="block w-full px-4 py-3 text-left text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+              className="block w-full px-4 py-3 text-left text-sm text-danger hover:bg-danger/5"
             >
               삭제
             </button>
-          </div>
+          </Card>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

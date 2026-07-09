@@ -14,8 +14,10 @@ export interface Expense {
   id: string;
   /** 날짜 (YYYY-MM-DD) */
   date: string;
-  /** 금액 */
+  /** 현지 금액(환율 있음) 또는 원화 금액(환율 없음) */
   amount: number;
+  /** 원화 환산 금액 — 저장 시 함께 기록 */
+  krwAmount?: number;
   /** 분류 */
   category: ExpenseCategory;
   /** Place 참조 ID (선택) — 예: 우나기노 에이토 식비 연결 */

@@ -1,16 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { COUNTRIES } from "@/data/countries";
-import type { CreateTripInput, Trip } from "@/types/trip";
+import { useEffect, useMemo, useState } from "react";
+import { COUNTRIES, getCurrencyCodeByCountryCode } from "@/data/countries";
+import type { CreateTripInput, Trip, TripStatus } from "@/types/trip";
+import { useTrips } from "@/contexts/TripContext";
 import {
   displayDateToIso,
   getCountryCodeByName,
 } from "@/lib/trip-utils";
+import {
+  formatExchangeRateLabel,
+  parseExchangeRateInput,
+} from "@/lib/currency-utils";
+import {
+  tripStatusDisplay,
+  tripStatusOptions,
+} from "@/lib/trip-status";
+import { Button, Card, Chip, Input, OverlayLayer, Text } from "@/components/ui";
+import CityAutocomplete from "./CityAutocomplete";
+import TripCoverPicker from "./TripCoverPicker";
 
 interface CreateTripModalProps {
   isOpen: boolean;
   editingTrip?: Trip | null;
+  initialCountryCode?: string;
   onClose: () => void;
   onSave: (input: CreateTripInput) => void;
 }
@@ -21,7 +34,12 @@ const EMPTY_FORM: CreateTripInput = {
   city: "",
   startDate: "",
   endDate: "",
+  exchangeRate: "",
+  coverImage: "",
 };
+
+const selectClassName =
+  "country-flag mt-1 h-10 w-full rounded-xl border border-border bg-card px-3.5 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
 
 /**
  * 새 여행 생성 / 여행 수정 모달
@@ -29,12 +47,27 @@ const EMPTY_FORM: CreateTripInput = {
 export default function CreateTripModal({
   isOpen,
   editingTrip = null,
+  initialCountryCode = "",
   onClose,
   onSave,
 }: CreateTripModalProps) {
+  const { setTripStatus, resetTripStatusAuto } = useTrips();
   const [form, setForm] = useState<CreateTripInput>(EMPTY_FORM);
+  const [includeDefaultChecklist, setIncludeDefaultChecklist] = useState(true);
   const [error, setError] = useState("");
+  const [focusCityInput, setFocusCityInput] = useState(false);
   const isEditing = editingTrip !== null;
+
+  const currency = form.countryCode
+    ? getCurrencyCodeByCountryCode(form.countryCode)
+    : "";
+  const isKrwTrip = currency === "KRW";
+
+  const exchangeRateLabel = useMemo(() => {
+    const rate = parseExchangeRateInput(form.exchangeRate);
+    if (!currency || isKrwTrip || rate == null) return null;
+    return formatExchangeRateLabel(currency, rate);
+  }, [currency, isKrwTrip, form.exchangeRate]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -52,17 +85,43 @@ export default function CreateTripModal({
         city,
         startDate: displayDateToIso(editingTrip.startDate),
         endDate: displayDateToIso(editingTrip.endDate),
+        exchangeRate:
+          editingTrip.exchangeRate != null && editingTrip.exchangeRate > 0
+            ? String(editingTrip.exchangeRate)
+            : "",
+        coverImage: editingTrip.coverImage ?? "",
       });
     } else {
-      setForm(EMPTY_FORM);
+      setForm({
+        ...EMPTY_FORM,
+        countryCode: initialCountryCode.trim(),
+      });
+      setIncludeDefaultChecklist(true);
+      setFocusCityInput(Boolean(initialCountryCode.trim()));
     }
     setError("");
-  }, [isOpen, editingTrip]);
-
-  if (!isOpen) return null;
+    if (editingTrip) {
+      setFocusCityInput(false);
+    }
+  }, [isOpen, editingTrip, initialCountryCode]);
 
   const handleChange = (field: keyof CreateTripInput, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+
+      if (field === "countryCode") {
+        const nextCurrency = getCurrencyCodeByCountryCode(value);
+        next.city = "";
+        if (nextCurrency === "KRW") {
+          next.exchangeRate = "";
+        }
+        if (value) {
+          setFocusCityInput(true);
+        }
+      }
+
+      return next;
+    });
     setError("");
   };
 
@@ -79,7 +138,10 @@ export default function CreateTripModal({
       return;
     }
 
-    onSave(form);
+    onSave({
+      ...form,
+      includeDefaultChecklist: isEditing ? undefined : includeDefaultChecklist,
+    });
     setForm(EMPTY_FORM);
     setError("");
     onClose();
@@ -91,29 +153,38 @@ export default function CreateTripModal({
     onClose();
   };
 
+  const handleStatusChange = (status: TripStatus) => {
+    if (!editingTrip) return;
+    if (status === editingTrip.status && editingTrip.statusIsManual) return;
+    setTripStatus(editingTrip.id, status);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/40"
-        onClick={handleClose}
-        aria-label="모달 닫기"
-      />
-
-      <div className="relative z-10 w-full max-w-lg rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl dark:bg-[#1c1c1e]">
-        <h2 className="text-xl font-bold text-[#111111] dark:text-white">
+    <OverlayLayer
+      isOpen={isOpen}
+      sheet
+      onClose={handleClose}
+      closeLabel="모달 닫기"
+    >
+        <Text variant="title-sm" as="h2" className="text-xl font-bold">
           {isEditing ? "여행 수정" : "새 여행 만들기"}
-        </h2>
+        </Text>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <TripCoverPicker
+            value={form.coverImage}
+            onChange={(coverImage) => handleChange("coverImage", coverImage)}
+            onError={setError}
+          />
+
           <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
+            <Text variant="label" as="span">
               국가
-            </span>
+            </Text>
             <select
               value={form.countryCode}
               onChange={(e) => handleChange("countryCode", e.target.value)}
-              className="country-flag mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
+              className={selectClassName}
             >
               <option value="">국가를 선택하세요</option>
               {COUNTRIES.map((country) => (
@@ -124,84 +195,171 @@ export default function CreateTripModal({
             </select>
           </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
+          {currency && (
+            <Card padding="sm" className="bg-primary/5">
+              <Text variant="muted">기본 통화</Text>
+              <Text variant="body-medium" className="mt-1 font-medium">
+                {currency}
+              </Text>
+            </Card>
+          )}
+
+          <div className="block">
+            <Text variant="label" as="span">
               도시
-            </span>
-            <input
-              type="text"
+            </Text>
+            <CityAutocomplete
+              countryCode={form.countryCode}
               value={form.city}
-              onChange={(e) => handleChange("city", e.target.value)}
-              placeholder="예: 후쿠오카"
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
+              onChange={(city) => handleChange("city", city)}
+              autoFocus={focusCityInput}
+              onAutoFocusComplete={() => setFocusCityInput(false)}
             />
-          </label>
+          </div>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
+            <Text variant="label" as="span">
               여행명{" "}
-              <span className="font-normal text-[#6e6e73] dark:text-[#a1a1a6]">
+              <Text variant="muted" as="span" className="font-normal">
                 (선택)
-              </span>
-            </span>
-            <input
+              </Text>
+            </Text>
+            <Input
               type="text"
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
               placeholder="비우면 도시명이 사용됩니다"
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
+              className="mt-1"
             />
           </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-sm font-medium text-[#111111] dark:text-white">
+              <Text variant="label" as="span">
                 시작일
-              </span>
-              <input
+              </Text>
+              <Input
                 type="date"
                 value={form.startDate}
                 onChange={(e) => handleChange("startDate", e.target.value)}
-                className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
+                className="mt-1"
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-[#111111] dark:text-white">
+              <Text variant="label" as="span">
                 종료일
-              </span>
-              <input
+              </Text>
+              <Input
                 type="date"
                 value={form.endDate}
                 onChange={(e) => handleChange("endDate", e.target.value)}
-                className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
+                className="mt-1"
               />
             </label>
           </div>
 
+          {currency && !isKrwTrip && (
+            <label className="block">
+              <Text variant="label" as="span">
+                환율 (1 {currency} = ? KRW){" "}
+                <Text variant="muted" as="span" className="font-normal">
+                  (선택)
+                </Text>
+              </Text>
+              <Input
+                type="number"
+                min="0"
+                step="0.0001"
+                value={form.exchangeRate}
+                onChange={(e) => handleChange("exchangeRate", e.target.value)}
+                placeholder="예: 9.31"
+                className="mt-1"
+              />
+              {exchangeRateLabel && (
+                <Text variant="caption" className="mt-1">
+                  {exchangeRateLabel}
+                </Text>
+              )}
+              <Text variant="caption" className="mt-1">
+                비우면 원화(KRW)로 지출을 기록합니다.
+              </Text>
+            </label>
+          )}
+
+          {isEditing && editingTrip && (
+            <div className="space-y-3 border-t border-border pt-4">
+              <Text variant="label">여행 상태</Text>
+              <Text variant="caption">
+                {editingTrip.statusIsManual
+                  ? "수동으로 설정된 상태입니다."
+                  : "시작일·종료일 기준으로 자동 관리됩니다."}
+              </Text>
+              <div className="flex flex-wrap gap-2">
+                {tripStatusOptions.map((status) => (
+                  <Chip
+                    key={status}
+                    active={editingTrip.status === status}
+                    onClick={() => handleStatusChange(status)}
+                    className="px-3 py-1.5 text-xs"
+                  >
+                    {tripStatusDisplay[status]}
+                  </Chip>
+                ))}
+              </div>
+              {editingTrip.statusIsManual && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => resetTripStatusAuto(editingTrip.id)}
+                  className="h-auto px-0 text-xs font-medium"
+                >
+                  자동 상태로 되돌리기
+                </Button>
+              )}
+            </div>
+          )}
+
+          {!isEditing && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3">
+              <input
+                type="checkbox"
+                checked={includeDefaultChecklist}
+                onChange={(e) => setIncludeDefaultChecklist(e.target.checked)}
+                className="mt-0.5 h-5 w-5 shrink-0 rounded border-border accent-primary"
+              />
+              <span>
+                <Text variant="body-medium" as="span" className="block font-medium">
+                  기본 체크리스트 추가
+                </Text>
+                <Text variant="caption" className="mt-1 block">
+                  예약·여행 준비·짐 등 공통 준비 항목을 자동으로 추가합니다.
+                </Text>
+              </span>
+            </label>
+          )}
+
           {error && (
-            <p className="text-sm text-red-500" role="alert">
+            <Text variant="body" className="text-danger" role="alert">
               {error}
-            </p>
+            </Text>
           )}
 
           <div className="flex gap-3 pt-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={handleClose}
-              className="flex-1 rounded-xl border border-[#ebebeb] py-3 font-medium text-[#111111] dark:border-white/20 dark:text-white"
+              className="flex-1"
             >
               취소
-            </button>
-            <button
-              type="submit"
-              className="flex-1 rounded-xl bg-[#0A84FF] py-3 font-semibold text-white"
-            >
+            </Button>
+            <Button type="submit" className="flex-1">
               저장
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </OverlayLayer>
   );
 }

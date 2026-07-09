@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTrips } from "@/contexts/TripContext";
+import { PageContainer, Text } from "@/components/ui";
 import TripDetailScreen from "./TripDetailScreen";
 
 interface TripPageClientProps {
@@ -15,12 +16,12 @@ export default function TripPageClient({ tripId }: TripPageClientProps) {
 
   if (!trip) {
     return (
-      <div className="flex min-h-full flex-col items-center justify-center gap-4 p-6">
-        <p className="text-[#6e6e73]">여행을 찾을 수 없습니다.</p>
-        <Link href="/" className="text-[#0A84FF] hover:underline">
+      <PageContainer className="flex min-h-full flex-col items-center justify-center gap-4 py-16">
+        <Text variant="muted">여행을 찾을 수 없습니다.</Text>
+        <Link href="/" className="text-sm font-medium text-primary hover:underline">
           홈으로 돌아가기
         </Link>
-      </div>
+      </PageContainer>
     );
   }
 

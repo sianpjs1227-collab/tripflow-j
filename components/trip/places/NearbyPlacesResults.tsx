@@ -2,79 +2,70 @@
 
 import { useMemo, useState } from "react";
 import type { Place } from "@/types/place";
-import { getPlaceCoordinates, type GeoPosition } from "@/lib/directions";
+import type { GeoPosition } from "@/lib/directions";
 import {
   groupNearbyPlacesByCategory,
   getNearbyPlaces,
   nearbyRadiusOptions,
+  type NearbyPlace,
   type NearbyRadiusOption,
 } from "@/lib/nearby-utils";
+import { Chip, Text } from "@/components/ui";
 import NearbyCategorySection from "./NearbyCategorySection";
 
 interface NearbyPlacesResultsProps {
+  /** 카테고리 필터가 적용된 장소 목록 */
   places: Place[];
+  searchQuery: string;
   userPosition: GeoPosition;
-  onClose: () => void;
+  onOpenPlace: (place: Place) => void;
 }
 
-/** 내 주변 결과 전용 화면 */
+/** 내 주변 결과 — 동일 places 데이터, 카테고리·검색 필터 적용 */
 export default function NearbyPlacesResults({
   places,
+  searchQuery,
   userPosition,
-  onClose,
+  onOpenPlace,
 }: NearbyPlacesResultsProps) {
   const [radius, setRadius] = useState<NearbyRadiusOption>(500);
-
-  const placesWithCoords = useMemo(
-    () => places.filter((place) => getPlaceCoordinates(place) != null),
-    [places],
-  );
+  const isSearching = searchQuery.trim().length > 0;
 
   const groupedNearby = useMemo(() => {
     const nearby = getNearbyPlaces(places, userPosition, radius);
-    return groupNearbyPlacesByCategory(nearby);
-  }, [places, userPosition, radius]);
+    const trimmed = searchQuery.trim().toLowerCase();
+    const searched: NearbyPlace[] = trimmed
+      ? nearby.filter((place) =>
+          place.name.toLowerCase().includes(trimmed),
+        )
+      : nearby;
+    return groupNearbyPlacesByCategory(searched);
+  }, [places, userPosition, radius, searchQuery]);
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-[#111111] dark:text-white">
-          내 주변 결과
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="shrink-0 text-sm font-medium text-[#0A84FF] hover:underline"
-        >
-          닫기
-        </button>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
+    <div className="mt-4">
+      <div className="flex flex-wrap gap-2">
         {nearbyRadiusOptions.map((option) => (
-          <button
+          <Chip
             key={option.label}
-            type="button"
+            active={radius === option.value}
             onClick={() => setRadius(option.value)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-              radius === option.value
-                ? "bg-[#0A84FF] text-white"
-                : "border border-[#ebebeb] bg-white text-[#111111] dark:border-white/20 dark:bg-white/[0.05] dark:text-white"
-            }`}
           >
             {option.label}
-          </button>
+          </Chip>
         ))}
       </div>
 
-      {placesWithCoords.length === 0 ? (
-        <p className="mt-6 text-sm text-[#6e6e73]">
-          좌표가 있는 장소가 없습니다. KML 가져오기로 장소를 추가해주세요.
-        </p>
+      {places.length === 0 ? (
+        <Text variant="muted" className="mt-6">
+          선택한 카테고리에 좌표가 있는 장소가 없습니다.
+        </Text>
       ) : groupedNearby.length === 0 ? (
-        <p className="mt-6 text-sm text-[#6e6e73]">
-          선택한 반경 안에 장소가 없습니다.
-        </p>
+        <Text variant="muted" className="mt-6 text-center">
+          {isSearching
+            ? "검색 결과가 없습니다."
+            : "선택한 반경 안에 장소가 없습니다."}
+        </Text>
       ) : (
         <div className="mt-6 space-y-4">
           {groupedNearby.map((group) => (
@@ -82,7 +73,8 @@ export default function NearbyPlacesResults({
               key={group.category}
               category={group.category}
               places={group.places}
-              userPosition={userPosition}
+              onOpenPlace={onOpenPlace}
+              defaultOpen={isSearching}
             />
           ))}
         </div>

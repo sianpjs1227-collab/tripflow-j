@@ -6,84 +6,219 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { createTrip, normalizeTrip, updateTrip as applyTripUpdate } from "@/lib/trip-utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { createTrip, updateTrip as applyTripUpdate } from "@/lib/trip-utils";
+import { computeAutoTripStatus } from "@/lib/trip-lifecycle";
+import {
+  loadTripsFromLocalStorage,
+  saveTripsToLocalStorage,
+} from "@/lib/trip-local-storage";
+import {
+  deleteSupabaseTrip,
+  fetchSupabaseTrips,
+  insertSupabaseTrip,
+  migrateLocalTripsToSupabase,
+  updateSupabaseTrip,
+} from "@/lib/supabase-trips";
 import { deleteTripDetailData } from "@/lib/trip-detail-storage";
 import { deleteMyMapsLink } from "@/lib/trip-maps";
-import type { CreateTripInput, Trip } from "@/types/trip";
+import type { CreateTripInput, Trip, TripStatus } from "@/types/trip";
 
-const STORAGE_KEY = "tripflow-trips";
-
-/** 더 이상 사용하지 않는 샘플 여행 ID */
-const SAMPLE_TRIP_IDS = new Set([
-  "trip-fukuoka",
-  "trip-tokyo",
-  "trip-osaka",
-]);
+type TripStorageMode = "local" | "supabase";
 
 interface TripContextValue {
   trips: Trip[];
   addTrip: (input: CreateTripInput) => Trip;
   updateTrip: (id: string, input: CreateTripInput) => void;
+  setTripStatus: (id: string, status: TripStatus) => void;
+  resetTripStatusAuto: (id: string) => void;
   deleteTrip: (id: string) => void;
   getTripById: (id: string) => Trip | undefined;
 }
 
 const TripContext = createContext<TripContextValue | null>(null);
 
-function loadTrips(): Trip[] {
-  if (typeof window === "undefined") return [];
+export function TripProvider({ children }: { children: React.ReactNode }) {
+  const { mode: authMode, user, loading: authLoading } = useAuth();
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [storageMode, setStorageMode] = useState<TripStorageMode>("local");
+  const [hydrated, setHydrated] = useState(false);
+  const storageModeRef = useRef<TripStorageMode>("local");
+  const userIdRef = useRef<string | null>(null);
 
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Trip[];
-      if (Array.isArray(parsed)) {
-        return parsed
-          .filter((trip) => !SAMPLE_TRIP_IDS.has(trip.id))
-          .map((trip) => normalizeTrip(trip));
+  useEffect(() => {
+    storageModeRef.current = storageMode;
+  }, [storageMode]);
+
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user?.id]);
+
+  const fallbackToLocal = useCallback((message: string) => {
+    console.error("[TripFlow Trips]", message);
+    setStorageMode("local");
+    setTrips(loadTripsFromLocalStorage());
+  }, []);
+
+  const syncTripToSupabase = useCallback(
+    async (trip: Trip, action: "insert" | "update") => {
+      const userId = userIdRef.current;
+      if (storageModeRef.current !== "supabase" || !userId) return;
+
+      try {
+        if (action === "insert") {
+          await insertSupabaseTrip(userId, trip);
+        } else {
+          await updateSupabaseTrip(trip);
+        }
+      } catch (error) {
+        const msg =
+          error instanceof Error ? error.message : "Supabase 동기화 실패";
+        fallbackToLocal(msg);
+      }
+    },
+    [fallbackToLocal],
+  );
+
+  const deleteTripFromSupabase = useCallback(
+    async (tripId: string) => {
+      if (storageModeRef.current !== "supabase") return;
+
+      try {
+        await deleteSupabaseTrip(tripId);
+      } catch (error) {
+        const msg =
+          error instanceof Error ? error.message : "Supabase 삭제 실패";
+        fallbackToLocal(msg);
+      }
+    },
+    [fallbackToLocal],
+  );
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    let cancelled = false;
+
+    async function loadTrips() {
+      const useSupabase = authMode === "supabase" && user != null;
+
+      if (!useSupabase) {
+        if (!cancelled) {
+          setStorageMode("local");
+          setTrips(loadTripsFromLocalStorage());
+          setHydrated(true);
+        }
+        return;
+      }
+
+      try {
+        let remoteTrips = await fetchSupabaseTrips(user.id);
+        const localTrips = loadTripsFromLocalStorage();
+
+        if (remoteTrips.length === 0 && localTrips.length > 0) {
+          remoteTrips = await migrateLocalTripsToSupabase(user.id, localTrips);
+        }
+
+        if (!cancelled) {
+          setStorageMode("supabase");
+          setTrips(remoteTrips);
+          setHydrated(true);
+        }
+      } catch (error) {
+        const msg =
+          error instanceof Error ? error.message : "Supabase 여행 로드 실패";
+        if (!cancelled) {
+          fallbackToLocal(msg);
+          setHydrated(true);
+        }
       }
     }
-  } catch {
-    // 저장 데이터가 깨진 경우 빈 목록
-  }
-  return [];
-}
 
-export function TripProvider({ children }: { children: React.ReactNode }) {
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+    setHydrated(false);
+    void loadTrips();
 
-  useEffect(() => {
-    setTrips(loadTrips());
-    setHydrated(true);
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, authMode, user, fallbackToLocal]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trips));
-  }, [trips, hydrated]);
+    if (!hydrated || storageMode !== "local") return;
+    saveTripsToLocalStorage(trips);
+  }, [trips, hydrated, storageMode]);
 
-  const addTrip = useCallback((input: CreateTripInput) => {
-    const newTrip = createTrip(input);
-    setTrips((prev) => [newTrip, ...prev]);
-    return newTrip;
-  }, []);
+  const addTrip = useCallback(
+    (input: CreateTripInput) => {
+      const newTrip = createTrip(input, {
+        useUuid: storageModeRef.current === "supabase",
+      });
+      setTrips((prev) => [newTrip, ...prev]);
+      void syncTripToSupabase(newTrip, "insert");
+      return newTrip;
+    },
+    [syncTripToSupabase],
+  );
 
-  const updateTrip = useCallback((id: string, input: CreateTripInput) => {
-    setTrips((prev) =>
-      prev.map((trip) =>
-        trip.id === id ? applyTripUpdate(trip, input) : trip,
-      ),
-    );
-  }, []);
+  const updateTrip = useCallback(
+    (id: string, input: CreateTripInput) => {
+      setTrips((prev) => {
+        const next = prev.map((trip) =>
+          trip.id === id ? applyTripUpdate(trip, input) : trip,
+        );
+        const updated = next.find((trip) => trip.id === id);
+        if (updated) void syncTripToSupabase(updated, "update");
+        return next;
+      });
+    },
+    [syncTripToSupabase],
+  );
 
-  const deleteTrip = useCallback((id: string) => {
-    setTrips((prev) => prev.filter((trip) => trip.id !== id));
-    deleteTripDetailData(id);
-    deleteMyMapsLink(id);
-  }, []);
+  const setTripStatus = useCallback(
+    (id: string, status: TripStatus) => {
+      setTrips((prev) => {
+        const next = prev.map((trip) =>
+          trip.id === id ? { ...trip, status, statusIsManual: true } : trip,
+        );
+        const updated = next.find((trip) => trip.id === id);
+        if (updated) void syncTripToSupabase(updated, "update");
+        return next;
+      });
+    },
+    [syncTripToSupabase],
+  );
+
+  const resetTripStatusAuto = useCallback(
+    (id: string) => {
+      setTrips((prev) => {
+        const next = prev.map((trip) => {
+          if (trip.id !== id) return trip;
+          const updated = {
+            ...trip,
+            statusIsManual: false,
+            status: computeAutoTripStatus(trip.startDate, trip.endDate),
+          };
+          void syncTripToSupabase(updated, "update");
+          return updated;
+        });
+        return next;
+      });
+    },
+    [syncTripToSupabase],
+  );
+
+  const deleteTrip = useCallback(
+    (id: string) => {
+      setTrips((prev) => prev.filter((trip) => trip.id !== id));
+      void deleteTripFromSupabase(id);
+      deleteTripDetailData(id);
+      deleteMyMapsLink(id);
+    },
+    [deleteTripFromSupabase],
+  );
 
   const getTripById = useCallback(
     (id: string) => trips.find((t) => t.id === id),
@@ -95,10 +230,20 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       trips,
       addTrip,
       updateTrip,
+      setTripStatus,
+      resetTripStatusAuto,
       deleteTrip,
       getTripById,
     }),
-    [trips, addTrip, updateTrip, deleteTrip, getTripById],
+    [
+      trips,
+      addTrip,
+      updateTrip,
+      setTripStatus,
+      resetTripStatusAuto,
+      deleteTrip,
+      getTripById,
+    ],
   );
 
   return <TripContext.Provider value={value}>{children}</TripContext.Provider>;

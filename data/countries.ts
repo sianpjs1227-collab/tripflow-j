@@ -3,6 +3,7 @@ export interface Country {
   name: string;
   code: string;
   flag: string;
+  currencyCode: string;
 }
 
 /** ISO 3166-1 alpha-2 코드 → Unicode 국기 이모지 */
@@ -18,18 +19,22 @@ export function countryCodeToFlag(code: string): string {
   );
 }
 
-const COUNTRY_ENTRIES: Array<{ name: string; code: string }> = [
-  { name: "대한민국", code: "KR" },
-  { name: "일본", code: "JP" },
-  { name: "태국", code: "TH" },
-  { name: "베트남", code: "VN" },
-  { name: "대만", code: "TW" },
-  { name: "홍콩", code: "HK" },
-  { name: "싱가포르", code: "SG" },
-  { name: "미국", code: "US" },
-  { name: "프랑스", code: "FR" },
-  { name: "이탈리아", code: "IT" },
-  { name: "영국", code: "GB" },
+const COUNTRY_ENTRIES: Array<{
+  name: string;
+  code: string;
+  currencyCode: string;
+}> = [
+  { name: "대한민국", code: "KR", currencyCode: "KRW" },
+  { name: "일본", code: "JP", currencyCode: "JPY" },
+  { name: "태국", code: "TH", currencyCode: "THB" },
+  { name: "베트남", code: "VN", currencyCode: "VND" },
+  { name: "대만", code: "TW", currencyCode: "TWD" },
+  { name: "홍콩", code: "HK", currencyCode: "HKD" },
+  { name: "싱가포르", code: "SG", currencyCode: "SGD" },
+  { name: "미국", code: "US", currencyCode: "USD" },
+  { name: "프랑스", code: "FR", currencyCode: "EUR" },
+  { name: "이탈리아", code: "IT", currencyCode: "EUR" },
+  { name: "영국", code: "GB", currencyCode: "GBP" },
 ];
 
 export const COUNTRIES: Country[] = COUNTRY_ENTRIES.map((entry) => ({
@@ -59,6 +64,12 @@ export function getCountryByName(name: string): Country | undefined {
 export function getCountryFlag(code: string): string {
   const country = getCountryByCode(code);
   return country?.flag ?? countryCodeToFlag(code);
+}
+
+/** 국가 코드로 기본 통화 코드 반환 */
+export function getCurrencyCodeByCountryCode(code: string): string {
+  const country = getCountryByCode(code);
+  return country?.currencyCode ?? "KRW";
 }
 
 export function resolveCountryName(country: string): string {

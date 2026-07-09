@@ -1,0 +1,40 @@
+-- TripFlow J — trips 테이블 (Supabase SQL Editor에서 실행)
+-- 기존 trips 테이블이 있다면 스키마가 다를 수 있으므로 개발 환경에서만 drop 후 재생성하세요.
+
+create extension if not exists "pgcrypto";
+
+drop table if exists public.trips;
+
+create table public.trips (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  country text not null,
+  city text not null,
+  start_date date not null,
+  end_date date not null,
+  status text not null check (status in ('PLANNING', 'TRAVELING', 'COMPLETED')),
+  cover_image text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index trips_user_id_idx on public.trips (user_id);
+
+alter table public.trips enable row level security;
+
+create policy "trips_select_own"
+  on public.trips for select
+  using (auth.uid() = user_id);
+
+create policy "trips_insert_own"
+  on public.trips for insert
+  with check (auth.uid() = user_id);
+
+create policy "trips_update_own"
+  on public.trips for update
+  using (auth.uid() = user_id);
+
+create policy "trips_delete_own"
+  on public.trips for delete
+  using (auth.uid() = user_id);

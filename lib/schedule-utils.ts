@@ -6,6 +6,18 @@ export function formatScheduleDate(date: string): string {
   return `${year}.${month}.${day}`;
 }
 
+/** 탭용 월/일 표시 (예: 8/11) */
+export function formatScheduleMonthDay(isoDate: string): string {
+  const [, month, day] = isoDate.split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
+/** DAY Chip용 월.일 표시 (예: 07.09) */
+export function formatScheduleChipDate(isoDate: string): string {
+  const [, month, day] = isoDate.split("-");
+  return `${month.padStart(2, "0")}.${day.padStart(2, "0")}`;
+}
+
 /** 날짜 → 시간 순으로 정렬 */
 export function sortEvents(items: Event[]): Event[] {
   return [...items].sort((a, b) => {

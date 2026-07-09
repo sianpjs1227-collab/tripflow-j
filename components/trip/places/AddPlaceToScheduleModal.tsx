@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AddPlaceToScheduleInput } from "@/types/place";
 import type { Place } from "@/types/place";
+import { Button, Input, OverlayLayer, Text } from "@/components/ui";
 
 interface AddPlaceToScheduleModalProps {
   isOpen: boolean;
@@ -56,74 +57,69 @@ export default function AddPlaceToScheduleModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/40"
-        onClick={handleClose}
-        aria-label="모달 닫기"
-      />
-
-      <div className="relative z-10 w-full max-w-lg rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl dark:bg-[#1c1c1e]">
-        <h2 className="text-xl font-bold text-[#111111] dark:text-white">
+    <OverlayLayer
+      onClose={handleClose}
+      closeLabel="모달 닫기"
+      panelClassName="bg-card p-6 shadow-xl"
+    >
+        <Text variant="title-sm" as="h2" className="text-xl font-bold">
           일정에 추가
-        </h2>
-        <p className="mt-1 text-sm text-[#6e6e73]">{place.name}</p>
+        </Text>
+        <Text variant="muted" className="mt-1">
+          {place.name}
+        </Text>
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
+            <Text variant="label" as="span">
               날짜
-            </span>
-            <input
+            </Text>
+            <Input
               type="date"
               value={form.date}
               onChange={(e) => {
                 setForm((prev) => ({ ...prev, date: e.target.value }));
                 setError("");
               }}
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
+              className="mt-1"
             />
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
+            <Text variant="label" as="span">
               시간
-            </span>
-            <input
+            </Text>
+            <Input
               type="time"
               value={form.time}
               onChange={(e) => {
                 setForm((prev) => ({ ...prev, time: e.target.value }));
                 setError("");
               }}
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
+              className="mt-1"
             />
           </label>
 
           {error && (
-            <p className="text-sm text-red-500" role="alert">
+            <Text variant="body" className="text-danger" role="alert">
               {error}
-            </p>
+            </Text>
           )}
 
           <div className="flex gap-3 pt-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={handleClose}
-              className="flex-1 rounded-xl border border-[#ebebeb] py-3 font-medium text-[#111111] dark:border-white/20 dark:text-white"
+              className="flex-1"
             >
               취소
-            </button>
-            <button
-              type="submit"
-              className="flex-1 rounded-xl bg-[#0A84FF] py-3 font-semibold text-white"
-            >
+            </Button>
+            <Button type="submit" className="flex-1">
               저장
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </OverlayLayer>
   );
 }

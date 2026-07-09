@@ -1,4 +1,6 @@
-import type { Place, PlaceCategory, PlaceInput } from "@/types/place";
+import type { Place, PlaceCategory, PlaceInput, PlaceSource } from "@/types/place";
+import { extractCoordsFromMapsLink } from "@/lib/maps-link-parser";
+import { isPlaceVisited } from "@/lib/place-visit";
 
 export const placeCategoryLabels: Record<PlaceCategory, string> = {
   accommodation: "숙소",
@@ -50,7 +52,24 @@ export function normalizePlaceCategory(
   return legacyCategoryMap[category] ?? "other";
 }
 
+export function inferPlaceSource(place: Place): PlaceSource {
+  if (place.source === "KML" || place.source === "MANUAL") {
+    return place.source;
+  }
+  if (placeHasStoredCoordinates(place)) {
+    return "KML";
+  }
+  return "MANUAL";
+}
+
+export function isKmlPlace(place: Place): boolean {
+  return inferPlaceSource(place) === "KML";
+}
+
 export function generatePlaceId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
   return `place-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
@@ -74,22 +93,77 @@ export function getDefaultEventTitleForPlace(place: Place): string {
   return place.name;
 }
 
+/** 저장된 latitude/longitude 여부 (내 주변·거리 계산용) */
+export function placeHasStoredCoordinates(place: Place): boolean {
+  return (
+    place.latitude != null &&
+    place.longitude != null &&
+    !Number.isNaN(place.latitude) &&
+    !Number.isNaN(place.longitude)
+  );
+}
+
+/** Google Maps 검색용 쿼리 (장소명 + 주소) */
+export function getPlaceSearchQuery(place: Place): string {
+  const parts = [place.name.trim(), place.address?.trim()].filter(Boolean);
+  return parts.join(" ");
+}
+
+function resolveManualCoords(mapsLink?: string): {
+  latitude?: number;
+  longitude?: number;
+} {
+  if (!mapsLink) return {};
+
+  const coords = extractCoordsFromMapsLink(mapsLink);
+  if (!coords) return {};
+
+  return {
+    latitude: coords.latitude,
+    longitude: coords.longitude,
+  };
+}
+
+/** 직접 추가(MANUAL) 장소 생성 */
 export function createPlace(input: PlaceInput): Place {
+  const mapsLink = input.mapsLink.trim() || undefined;
+  const coords = resolveManualCoords(mapsLink);
+
   return {
     id: generatePlaceId(),
+    source: "MANUAL",
     name: input.name.trim(),
     category: input.category,
-    mapsLink: input.mapsLink.trim() || undefined,
+    address: input.address.trim() || undefined,
+    mapsLink,
+    ...coords,
     memo: input.memo.trim() || undefined,
   };
 }
 
+/** 장소 수정 — KML 장소는 좌표·링크·source 유지 */
 export function updatePlace(place: Place, input: PlaceInput): Place {
+  if (isKmlPlace(place)) {
+    return {
+      ...place,
+      name: input.name.trim(),
+      category: input.category,
+      memo: input.memo.trim() || undefined,
+    };
+  }
+
+  const mapsLink = input.mapsLink.trim() || undefined;
+  const coords = resolveManualCoords(mapsLink);
+
   return {
     ...place,
+    source: "MANUAL",
     name: input.name.trim(),
     category: input.category,
-    mapsLink: input.mapsLink.trim() || undefined,
+    address: input.address.trim() || undefined,
+    mapsLink,
+    latitude: coords.latitude,
+    longitude: coords.longitude,
     memo: input.memo.trim() || undefined,
   };
 }
@@ -101,12 +175,14 @@ export function upsertPlace(
 ): { places: Place[]; place: Place } {
   const trimmedName = name.trim();
   const trimmedLink = mapsLink?.trim() || undefined;
+  const coords = resolveManualCoords(trimmedLink);
 
   const existing = places.find((p) => p.name === trimmedName);
   if (existing) {
     const updated: Place = {
       ...existing,
       mapsLink: trimmedLink ?? existing.mapsLink,
+      ...(trimmedLink ? coords : {}),
     };
     return {
       places: places.map((p) => (p.id === existing.id ? updated : p)),
@@ -116,9 +192,11 @@ export function upsertPlace(
 
   const place: Place = {
     id: generatePlaceId(),
+    source: "MANUAL",
     name: trimmedName,
     category: "other",
     mapsLink: trimmedLink,
+    ...coords,
   };
 
   return { places: [...places, place], place };
@@ -130,17 +208,13 @@ export function getGoogleMapsUrlForPlace(place: Place): string | null {
     return link.startsWith("http") ? link : `https://${link}`;
   }
 
-  if (
-    place.latitude != null &&
-    place.longitude != null &&
-    !Number.isNaN(place.latitude) &&
-    !Number.isNaN(place.longitude)
-  ) {
+  if (placeHasStoredCoordinates(place)) {
     return `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`;
   }
 
-  if (place.name.trim()) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name.trim())}`;
+  const searchQuery = getPlaceSearchQuery(place);
+  if (searchQuery) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchQuery)}`;
   }
 
   return null;
@@ -151,11 +225,13 @@ export function openGoogleMapsForPlace(place: Place): void {
   if (url) window.open(url, "_blank", "noopener,noreferrer");
 }
 
-export function isPlaceUsedInEvents(
-  placeId: string,
-  eventPlaceIds: string[],
-): boolean {
-  return eventPlaceIds.includes(placeId);
+/** 지도 링크·좌표·이름·주소 중 하나라도 있으면 지도 열기 가능 */
+export function placeHasMaps(place: Place): boolean {
+  return Boolean(
+    place.mapsLink?.trim() ||
+      placeHasStoredCoordinates(place) ||
+      getPlaceSearchQuery(place),
+  );
 }
 
 /** 카테고리별로 장소 그룹핑 (빈 카테고리 제외) */
@@ -180,3 +256,53 @@ export function groupPlacesByCategory(
     }))
     .filter((group) => group.places.length > 0);
 }
+
+export function isPlaceUsedInEvents(
+  placeId: string,
+  eventPlaceIds: string[],
+): boolean {
+  return eventPlaceIds.includes(placeId);
+}
+
+/** 장소명 기준 실시간 검색 필터 */
+export function filterPlacesByName(
+  places: Place[],
+  query: string,
+): Place[] {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return places;
+  return places.filter((place) =>
+    place.name.toLowerCase().includes(trimmed),
+  );
+}
+
+/** 카테고리·즐겨찾기·방문 상태 필터 (검색 전 단계) */
+export function filterPlacesByActiveFilter(
+  places: Place[],
+  activeFilter: PlaceListFilter,
+  favoriteIds: ReadonlySet<string>,
+): Place[] {
+  switch (activeFilter) {
+    case "favorites":
+      return places.filter((place) => favoriteIds.has(place.id));
+    case "not_visited":
+      return places.filter((place) => !isPlaceVisited(place));
+    case "visited":
+      return places.filter((place) => isPlaceVisited(place));
+    case "rating_sort":
+      return [...places].sort((a, b) => {
+        const ratingA = a.visit?.rating ?? 0;
+        const ratingB = b.visit?.rating ?? 0;
+        return ratingB - ratingA;
+      });
+    default:
+      return places;
+  }
+}
+
+export type PlaceListFilter =
+  | "all"
+  | "favorites"
+  | "not_visited"
+  | "visited"
+  | "rating_sort";

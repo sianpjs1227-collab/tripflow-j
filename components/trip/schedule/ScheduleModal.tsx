@@ -1,13 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { Place, PlaceInput } from "@/types/place";
 import type { ScheduleInput, ScheduleItem } from "@/types/schedule";
+import { getPlaceById, placeCategoryIcons } from "@/lib/place-utils";
+import {
+  Button,
+  Card,
+  Input,
+  OverlayLayer,
+  Text,
+  Textarea,
+} from "@/components/ui";
+import PlacePickerModal from "./PlacePickerModal";
 
 interface ScheduleModalProps {
   isOpen: boolean;
   editingItem: ScheduleItem | null;
+  places: Place[];
+  defaultDate?: string;
+  /** 일정 추가 시 폼 초기값 (빈 시간 추천 등) */
+  initialForm?: Partial<ScheduleInput>;
   onClose: () => void;
   onSave: (input: ScheduleInput) => void;
+  onAddPlace: (input: PlaceInput) => Place;
   onDelete?: (id: string) => void;
 }
 
@@ -15,8 +31,7 @@ const EMPTY_FORM: ScheduleInput = {
   date: "",
   time: "",
   title: "",
-  placeName: "",
-  mapsLink: "",
+  placeId: "",
   memo: "",
 };
 
@@ -26,13 +41,23 @@ const EMPTY_FORM: ScheduleInput = {
 export default function ScheduleModal({
   isOpen,
   editingItem,
+  places,
+  defaultDate = "",
+  initialForm,
   onClose,
   onSave,
+  onAddPlace,
   onDelete,
 }: ScheduleModalProps) {
   const [form, setForm] = useState<ScheduleInput>(EMPTY_FORM);
   const [error, setError] = useState("");
+  const [isPlacePickerOpen, setIsPlacePickerOpen] = useState(false);
   const isEditing = editingItem !== null;
+
+  const selectedPlace = useMemo(
+    () => getPlaceById(places, form.placeId),
+    [places, form.placeId],
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -42,28 +67,44 @@ export default function ScheduleModal({
         date: editingItem.date,
         time: editingItem.time,
         title: editingItem.title,
-        placeName: editingItem.placeName,
-        mapsLink: editingItem.mapsLink ?? "",
+        placeId: editingItem.placeId,
         memo: editingItem.memo ?? "",
       });
     } else {
-      setForm(EMPTY_FORM);
+      setForm({
+        ...EMPTY_FORM,
+        date: initialForm?.date ?? defaultDate,
+        time: initialForm?.time ?? "",
+        title: initialForm?.title ?? "",
+        placeId: initialForm?.placeId ?? "",
+        memo: initialForm?.memo ?? "",
+      });
     }
     setError("");
-  }, [isOpen, editingItem]);
-
-  if (!isOpen) return null;
+    setIsPlacePickerOpen(false);
+  }, [isOpen, editingItem, defaultDate, initialForm]);
 
   const handleChange = (field: keyof ScheduleInput, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setError("");
   };
 
+  const handlePlaceSelect = (place: Place) => {
+    setForm((prev) => ({ ...prev, placeId: place.id }));
+    setError("");
+    setIsPlacePickerOpen(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.date || !form.time || !form.title.trim() || !form.placeName.trim()) {
-      setError("날짜, 시간, 일정 제목, 장소명을 입력해주세요.");
+    if (!form.date || !form.time || !form.title.trim()) {
+      setError("날짜, 시간, 일정 제목을 입력해주세요.");
+      return;
+    }
+
+    if (!form.placeId) {
+      setError("장소를 선택해주세요.");
       return;
     }
 
@@ -85,132 +126,158 @@ export default function ScheduleModal({
   const handleClose = () => {
     setForm(EMPTY_FORM);
     setError("");
+    setIsPlacePickerOpen(false);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/40"
-        onClick={handleClose}
-        aria-label="모달 닫기"
-      />
+    <>
+      <OverlayLayer
+        isOpen={isOpen}
+        sheet
+        onClose={handleClose}
+        closeLabel="모달 닫기"
+      >
+          <Text variant="title-sm" as="h2" className="text-xl font-bold">
+            {isEditing ? "일정 수정" : "일정 추가"}
+          </Text>
 
-      <div className="relative z-10 w-full max-w-lg rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl dark:bg-[#1c1c1e]">
-        <h2 className="text-xl font-bold text-[#111111] dark:text-white">
-          {isEditing ? "일정 수정" : "일정 추가"}
-        </h2>
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+            <label className="block">
+              <Text variant="label" as="span">
+                날짜
+              </Text>
+              <Input
+                type="date"
+                value={form.date}
+                onChange={(e) => handleChange("date", e.target.value)}
+                className="mt-1"
+              />
+            </label>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-          <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
-              날짜
-            </span>
-            <input
-              type="date"
-              value={form.date}
-              onChange={(e) => handleChange("date", e.target.value)}
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
-            />
-          </label>
+            <label className="block">
+              <Text variant="label" as="span">
+                시간
+              </Text>
+              <Input
+                type="time"
+                value={form.time}
+                onChange={(e) => handleChange("time", e.target.value)}
+                className="mt-1"
+              />
+            </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
-              시간
-            </span>
-            <input
-              type="time"
-              value={form.time}
-              onChange={(e) => handleChange("time", e.target.value)}
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
-            />
-          </label>
+            <label className="block">
+              <Text variant="label" as="span">
+                일정 제목
+              </Text>
+              <Input
+                type="text"
+                value={form.title}
+                onChange={(e) => handleChange("title", e.target.value)}
+                placeholder="예: 점심"
+                className="mt-1"
+              />
+            </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
-              일정 제목
-            </span>
-            <input
-              type="text"
-              value={form.title}
-              onChange={(e) => handleChange("title", e.target.value)}
-              placeholder="예: 점심"
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
-            />
-          </label>
+            <div className="block">
+              <Text variant="label" as="span">
+                장소
+              </Text>
 
-          <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
-              장소명
-            </span>
-            <input
-              type="text"
-              value={form.placeName}
-              onChange={(e) => handleChange("placeName", e.target.value)}
-              placeholder="예: 우나기노 에이토"
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
-            />
-          </label>
+              {selectedPlace ? (
+                <Card padding="sm" className="mt-2 bg-primary/5">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl" aria-hidden>
+                      {placeCategoryIcons[selectedPlace.category]}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <Text variant="body-medium" className="text-base font-semibold">
+                        {selectedPlace.name}
+                      </Text>
+                      {(selectedPlace.mapsLink ||
+                        selectedPlace.latitude != null) && (
+                        <Text variant="caption" className="mt-1">
+                          지도·좌표 연결됨
+                        </Text>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsPlacePickerOpen(true)}
+                    className="mt-3 h-auto px-0"
+                  >
+                    장소 변경
+                  </Button>
+                </Card>
+              ) : (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setIsPlacePickerOpen(true)}
+                  className="mt-2 w-full border-dashed border-primary/40 text-primary"
+                >
+                  장소 선택
+                </Button>
+              )}
+            </div>
 
-          <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
-              Google Maps 링크 <span className="text-[#6e6e73]">(선택)</span>
-            </span>
-            <input
-              type="url"
-              value={form.mapsLink}
-              onChange={(e) => handleChange("mapsLink", e.target.value)}
-              placeholder="https://maps.google.com/..."
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
-            />
-          </label>
+            <label className="block">
+              <Text variant="label" as="span">
+                메모 <Text variant="muted" as="span">(선택)</Text>
+              </Text>
+              <Textarea
+                value={form.memo}
+                onChange={(e) => handleChange("memo", e.target.value)}
+                placeholder="추가 메모"
+                rows={3}
+                className="mt-1"
+              />
+            </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
-              메모 <span className="text-[#6e6e73]">(선택)</span>
-            </span>
-            <textarea
-              value={form.memo}
-              onChange={(e) => handleChange("memo", e.target.value)}
-              placeholder="추가 메모"
-              rows={3}
-              className="mt-1 w-full resize-none rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
-            />
-          </label>
-
-          {error && (
-            <p className="text-sm text-red-500" role="alert">
-              {error}
-            </p>
-          )}
-
-          <div className="flex gap-3 pt-2">
-            {isEditing && onDelete && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="rounded-xl border border-red-200 px-4 py-3 font-medium text-red-500 dark:border-red-500/30"
-              >
-                삭제
-              </button>
+            {error && (
+              <Text variant="body" className="text-danger" role="alert">
+                {error}
+              </Text>
             )}
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 rounded-xl border border-[#ebebeb] py-3 font-medium text-[#111111] dark:border-white/20 dark:text-white"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              className="flex-1 rounded-xl bg-[#0A84FF] py-3 font-semibold text-white"
-            >
-              저장
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+
+            <div className="flex gap-3 pt-2">
+              {isEditing && onDelete && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleDelete}
+                  className="border-danger/30 text-danger"
+                >
+                  삭제
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleClose}
+                className="flex-1"
+              >
+                취소
+              </Button>
+              <Button type="submit" className="flex-1">
+                저장
+              </Button>
+            </div>
+          </form>
+      </OverlayLayer>
+
+      <PlacePickerModal
+        isOpen={isPlacePickerOpen}
+        places={places}
+        selectedPlaceId={form.placeId}
+        onClose={() => setIsPlacePickerOpen(false)}
+        onSelect={handlePlaceSelect}
+        onCreatePlace={onAddPlace}
+      />
+    </>
   );
 }

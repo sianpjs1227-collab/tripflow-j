@@ -21,12 +21,12 @@ export interface ScheduleItem {
   memo?: string;
 }
 
-/** 일정 추가/수정 폼 입력 (UI) */
+/** 일정 추가/수정 폼 입력 (UI) — Place.placeId 참조 */
 export interface ScheduleInput {
   date: string;
   time: string;
   title: string;
-  placeName: string;
-  mapsLink: string;
+  /** 장소 탭 Place ID */
+  placeId: string;
   memo: string;
 }

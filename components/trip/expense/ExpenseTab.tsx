@@ -1,36 +1,42 @@
 "use client";
 
-import { useState } from "react";
-import type { Expense, ExpenseInput } from "@/types/expense";
+import { useMemo, useState } from "react";
+import type { Trip } from "@/types/trip";
+import type { ExpenseInput } from "@/types/expense";
 import { useTripDetail } from "@/contexts/TripDetailContext";
+import { formatExchangeRateLabel, tripHasExchangeRate } from "@/lib/currency-utils";
 import {
+  createExpenseFromInput,
   expenseCategoryLabels,
-  formatExpenseAmount,
   formatExpenseDate,
-  generateExpenseId,
+  formatExpenseDisplay,
+  formatExpenseTotalDisplay,
 } from "@/lib/expense-utils";
+import { Button, Card, Text } from "@/components/ui";
 import ExpenseModal from "./ExpenseModal";
 
-function ExpenseTabContent() {
+interface ExpenseTabProps {
+  trip: Trip;
+}
+
+function ExpenseTabContent({ trip }: ExpenseTabProps) {
   const { data, updateData } = useTripDetail();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const expenses = data.expenses;
+  const hasRate = tripHasExchangeRate(trip);
 
   const sortedExpenses = [...expenses].sort((a, b) =>
     b.date.localeCompare(a.date),
   );
 
-  const totalAmount = expenses.reduce((sum, item) => sum + item.amount, 0);
+  const totalDisplay = useMemo(
+    () => formatExpenseTotalDisplay(expenses, trip),
+    [expenses, trip],
+  );
 
   const handleSave = (input: ExpenseInput) => {
-    const newItem: Expense = {
-      id: generateExpenseId(),
-      date: input.date,
-      amount: Number(input.amount),
-      category: input.category,
-      memo: input.memo.trim() || undefined,
-    };
+    const newItem = createExpenseFromInput(input, trip);
 
     updateData((prev) => ({
       ...prev,
@@ -39,51 +45,65 @@ function ExpenseTabContent() {
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-lg font-semibold">지출기록</h2>
-      <p className="mt-2 text-sm text-[#6e6e73]">
-        총 지출: {formatExpenseAmount(totalAmount)}
-      </p>
+    <div className="space-y-4">
+      <Text variant="title-sm" as="h2">
+        지출기록
+      </Text>
 
-      <button
-        type="button"
-        onClick={() => setIsModalOpen(true)}
-        className="mt-4 w-full rounded-xl bg-[#0A84FF] py-3 text-sm font-semibold text-white"
-      >
+      <div className="mt-2 space-y-1">
+        <Text variant="body-medium">{totalDisplay.primary}</Text>
+        {totalDisplay.secondary && (
+          <Text variant="body" className="text-primary">
+            {totalDisplay.secondary}
+          </Text>
+        )}
+        {hasRate && trip.exchangeRate != null && (
+          <Text variant="muted">
+            {formatExchangeRateLabel(trip.currency, trip.exchangeRate)}
+          </Text>
+        )}
+      </div>
+
+      <Button type="button" onClick={() => setIsModalOpen(true)} className="w-full">
         지출 추가
-      </button>
+      </Button>
 
       {expenses.length === 0 ? (
-        <p className="mt-6 text-sm text-[#6e6e73]">
+        <Text variant="muted" className="mt-6">
           아직 등록된 지출이 없습니다.
-        </p>
+        </Text>
       ) : (
         <ul className="mt-6 space-y-2" role="list">
-          {sortedExpenses.map((item) => (
-            <li
-              key={item.id}
-              className="rounded-xl border border-[#ebebeb] bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.05]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-base font-medium text-[#111111] dark:text-white">
-                    {formatExpenseAmount(item.amount)}
-                  </p>
-                  <p className="mt-1 text-sm text-[#6e6e73]">
+          {sortedExpenses.map((item) => {
+            const display = formatExpenseDisplay(item, trip);
+
+            return (
+              <li key={item.id}>
+                <Card padding="sm">
+                  <Text variant="body-medium" className="text-base">
+                    {display.title}
+                  </Text>
+                  <Text variant="body-medium" className="mt-1 text-base">
+                    {display.primary}
+                  </Text>
+                  {display.secondary && (
+                    <Text variant="body" className="mt-0.5 text-primary">
+                      {display.secondary}
+                    </Text>
+                  )}
+                  <Text variant="muted" className="mt-1">
                     {formatExpenseDate(item.date)} ·{" "}
                     {expenseCategoryLabels[item.category]}
-                  </p>
-                  {item.memo && (
-                    <p className="mt-1 text-sm text-[#6e6e73]">{item.memo}</p>
-                  )}
-                </div>
-              </div>
-            </li>
-          ))}
+                  </Text>
+                </Card>
+              </li>
+            );
+          })}
         </ul>
       )}
 
       <ExpenseModal
+        trip={trip}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSave}
@@ -92,9 +112,7 @@ function ExpenseTabContent() {
   );
 }
 
-/**
- * 지출기록 탭 — TripDetailData.expenses 사용
- */
-export default function ExpenseTab() {
-  return <ExpenseTabContent />;
+/** 지출기록 탭 — TripDetailData.expenses 사용 */
+export default function ExpenseTab({ trip }: ExpenseTabProps) {
+  return <ExpenseTabContent trip={trip} />;
 }

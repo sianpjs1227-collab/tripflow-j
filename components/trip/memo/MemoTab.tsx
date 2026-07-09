@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { Note, NoteInput } from "@/types/note";
 import { useTripDetail } from "@/contexts/TripDetailContext";
 import { createNote, updateNote } from "@/lib/note-utils";
+import { Button, Text } from "@/components/ui";
 import MemoItem from "./MemoItem";
 import MemoModal from "./MemoModal";
 
@@ -61,22 +62,22 @@ function MemoTabContent() {
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-lg font-semibold">메모</h2>
-      <p className="mt-2 text-sm text-[#6e6e73]">{notes.length}개</p>
+    <div className="space-y-4">
+      <Text variant="title-sm" as="h2">
+        메모
+      </Text>
+      <Text variant="muted" className="mt-2">
+        {notes.length}개
+      </Text>
 
-      <button
-        type="button"
-        onClick={openCreateModal}
-        className="mt-4 w-full rounded-xl bg-[#0A84FF] py-3 text-sm font-semibold text-white"
-      >
+      <Button type="button" onClick={openCreateModal} className="w-full">
         메모 추가
-      </button>
+      </Button>
 
       {notes.length === 0 ? (
-        <p className="mt-6 text-sm text-[#6e6e73]">
+        <Text variant="muted" className="mt-6">
           아직 등록된 메모가 없습니다.
-        </p>
+        </Text>
       ) : (
         <ul className="mt-6 space-y-3" role="list">
           {notes.map((note) => (

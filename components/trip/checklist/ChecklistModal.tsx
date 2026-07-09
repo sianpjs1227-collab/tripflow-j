@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ChecklistInput, ChecklistItem } from "@/types/checklist";
+import { Button, Input, OverlayLayer, Text } from "@/components/ui";
 
 interface ChecklistModalProps {
   isOpen: boolean;
@@ -29,8 +30,6 @@ export default function ChecklistModal({
     setForm(editingItem ? { text: editingItem.text } : EMPTY_FORM);
     setError("");
   }, [isOpen, editingItem]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,25 +59,22 @@ export default function ChecklistModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/40"
-        onClick={handleClose}
-        aria-label="모달 닫기"
-      />
-
-      <div className="relative z-10 w-full max-w-lg rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl dark:bg-[#1c1c1e]">
-        <h2 className="text-xl font-bold text-[#111111] dark:text-white">
+    <OverlayLayer
+      isOpen={isOpen}
+      sheet
+      onClose={handleClose}
+      closeLabel="모달 닫기"
+    >
+        <Text variant="title-sm" as="h2" className="text-xl font-bold">
           {isEditing ? "항목 수정" : "항목 추가"}
-        </h2>
+        </Text>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <label className="block">
-            <span className="text-sm font-medium text-[#111111] dark:text-white">
+            <Text variant="label" as="span">
               항목
-            </span>
-            <input
+            </Text>
+            <Input
               type="text"
               value={form.text}
               onChange={(e) => {
@@ -86,42 +82,40 @@ export default function ChecklistModal({
                 setError("");
               }}
               placeholder="예: 여권"
-              className="mt-1 w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-base outline-none focus:border-[#0A84FF] dark:border-white/20 dark:bg-black/30 dark:text-white"
+              className="mt-1"
             />
           </label>
 
           {error && (
-            <p className="text-sm text-red-500" role="alert">
+            <Text variant="body" className="text-danger" role="alert">
               {error}
-            </p>
+            </Text>
           )}
 
           <div className="flex gap-3 pt-2">
             {isEditing && onDelete && (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={handleDelete}
-                className="rounded-xl border border-red-200 px-4 py-3 text-sm font-medium text-red-500 dark:border-red-500/30"
+                className="border-danger/30 text-danger"
               >
                 삭제
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={handleClose}
-              className="flex-1 rounded-xl border border-[#ebebeb] py-3 font-medium text-[#111111] dark:border-white/20 dark:text-white"
+              className="flex-1"
             >
               취소
-            </button>
-            <button
-              type="submit"
-              className="flex-1 rounded-xl bg-[#0A84FF] py-3 font-semibold text-white"
-            >
+            </Button>
+            <Button type="submit" className="flex-1">
               저장
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </OverlayLayer>
   );
 }

@@ -20,7 +20,7 @@ export default function TripTabContent({ trip, activeTab }: TripTabContentProps)
       return <PlacesTab />;
 
     case "budget":
-      return <ExpenseTab />;
+      return <ExpenseTab trip={trip} />;
 
     case "checklist":
       return <ChecklistTab />;

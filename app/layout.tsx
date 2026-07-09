@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import { TripProvider } from "@/contexts/TripContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import AuthDevBar from "@/components/auth/AuthDevBar";
 import "./globals.css";
 
 /**
@@ -24,10 +26,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f5f7" },
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
-  ],
+  themeColor: "#F8FAFC",
 };
 
 export default function RootLayout({
@@ -36,9 +35,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className={`${notoSansKR.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col text-foreground">
-        <TripProvider>{children}</TripProvider>
+    <html lang="ko" className={`${notoSansKR.variable} h-full antialiased light`}>
+      <body className="min-h-full flex flex-col bg-background text-foreground">
+        <AuthProvider>
+          <TripProvider>{children}</TripProvider>
+          <AuthDevBar />
+        </AuthProvider>
       </body>
     </html>
   );

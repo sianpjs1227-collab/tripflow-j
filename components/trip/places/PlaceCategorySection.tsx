@@ -1,54 +1,60 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { Place, PlaceCategory } from "@/types/place";
 import {
   placeCategoryIcons,
   placeCategoryLabels,
 } from "@/lib/place-utils";
-import { PlaceCard } from "./PlaceDetailModal";
+import { Text } from "@/components/ui";
+import PlaceListCard from "./PlaceListCard";
 
 interface PlaceCategorySectionProps {
   category: PlaceCategory;
   places: Place[];
-  onPlaceClick: (place: Place) => void;
+  onOpenPlace: (place: Place) => void;
+  defaultOpen?: boolean;
 }
 
 /** 카테고리별 접기/펼치기 장소 목록 */
 export default function PlaceCategorySection({
   category,
   places,
-  onPlaceClick,
+  onOpenPlace,
+  defaultOpen = false,
 }: PlaceCategorySectionProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
 
   const icon = placeCategoryIcons[category];
   const label = placeCategoryLabels[category];
 
   return (
-    <section className="border-b border-[#ebebeb] pb-4 last:border-b-0 dark:border-white/10">
+    <section className="border-b border-border pb-4 last:border-b-0">
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className="flex w-full items-center justify-between py-2 text-left"
         aria-expanded={isOpen}
       >
-        <span className="text-base font-semibold text-[#111111] dark:text-white">
+        <Text variant="body-medium" as="span" className="text-base font-semibold">
           {icon} {label}{" "}
-          <span className="text-sm font-normal text-[#6e6e73]">
+          <Text variant="muted" as="span" className="text-sm font-normal">
             ({places.length})
-          </span>
-        </span>
-        <span className="text-sm text-[#6e6e73]" aria-hidden>
-          {isOpen ? "▼" : "▶"}
-        </span>
+          </Text>
+        </Text>
+        {isOpen ? (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+        )}
       </button>
 
       {isOpen && (
         <ul className="mt-2 space-y-2" role="list">
           {places.map((place) => (
             <li key={place.id}>
-              <PlaceCard place={place} onClick={() => onPlaceClick(place)} />
+              <PlaceListCard place={place} onOpen={onOpenPlace} />
             </li>
           ))}
         </ul>

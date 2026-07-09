@@ -4,6 +4,9 @@ import type { ScheduleInput, ScheduleItem } from "@/types/schedule";
 import { getDefaultEventTitleForPlace, getPlaceById } from "@/lib/place-utils";
 
 export function generateEventId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
   return `event-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
@@ -39,10 +42,9 @@ export function toScheduleItems(
   );
 }
 
-/** 폼 입력 → Event 필드 (placeId 는 별도 upsert 후 주입) */
+/** 폼 입력 → Event (placeId 로 Place 참조) */
 export function buildEventFromInput(
   input: ScheduleInput,
-  placeId: string,
   existingId?: string,
 ): Event {
   return {
@@ -50,7 +52,7 @@ export function buildEventFromInput(
     date: input.date,
     time: input.time,
     title: input.title.trim(),
-    placeId,
+    placeId: input.placeId,
     memo: input.memo.trim() || undefined,
   };
 }

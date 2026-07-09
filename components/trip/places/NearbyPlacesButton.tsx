@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { MapPin } from "lucide-react";
 import {
   getCurrentPosition,
   LOCATION_DENIED_MESSAGE,
   type GeoPosition,
 } from "@/lib/directions";
+import { Button } from "@/components/ui";
 
 interface NearbyPlacesButtonProps {
   onOpen: (position: GeoPosition) => void;
@@ -29,15 +31,17 @@ export default function NearbyPlacesButton({ onOpen }: NearbyPlacesButtonProps) 
   };
 
   return (
-    <button
+    <Button
       type="button"
+      variant="secondary"
       onClick={() => {
         void handleClick();
       }}
       disabled={isLoading}
-      className="w-full rounded-xl border border-[#ebebeb] bg-white py-3 text-sm font-semibold text-[#111111] transition-colors hover:border-[#0A84FF]/30 disabled:opacity-60 dark:border-white/20 dark:bg-white/[0.05] dark:text-white"
+      className="w-full"
     >
-      {isLoading ? "위치 확인 중…" : "📍 내 주변"}
-    </button>
+      <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+      {isLoading ? "위치 확인 중…" : "내 주변"}
+    </Button>
   );
 }

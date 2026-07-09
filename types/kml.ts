@@ -19,4 +19,6 @@ export interface KmlImportResult {
   places: Place[];
   addedCount: number;
   skippedCount: number;
+  updatedCount?: number;
+  deletedCount?: number;
 }
