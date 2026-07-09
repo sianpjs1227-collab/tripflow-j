@@ -4,7 +4,7 @@ import {
   normalizePlaceCategory,
 } from "@/lib/place-utils";
 import { isPlaceVisited } from "@/lib/place-visit";
-import { getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseClient, logSupabaseQueryResult } from "@/lib/supabase";
 import type { Place } from "@/types/place";
 import type {
   SupabasePlaceInsert,
@@ -104,6 +104,7 @@ export async function fetchSupabasePlacesByTripId(
     .eq("trip_id", tripId)
     .order("created_at", { ascending: true });
 
+  logSupabaseQueryResult("places.select", { tripId, data }, error);
   if (error) throw error;
 
   return (data as SupabasePlaceRow[]).map(supabaseRowToPlace);
@@ -116,11 +117,11 @@ export async function insertSupabasePlace(
 ): Promise<void> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
+  const row = placeToSupabaseInsert(place, tripId);
 
-  const { error } = await client
-    .from("places")
-    .insert(placeToSupabaseInsert(place, tripId));
+  const { data, error } = await client.from("places").insert(row).select();
 
+  logSupabaseQueryResult("places.insert", { tripId, row, data }, error);
   if (error) throw error;
 }
 
@@ -128,12 +129,14 @@ export async function insertSupabasePlace(
 export async function updateSupabasePlace(place: Place): Promise<void> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
+  const row = placeToSupabaseUpdate(place);
 
   const { error } = await client
     .from("places")
-    .update(placeToSupabaseUpdate(place))
+    .update(row)
     .eq("id", place.id);
 
+  logSupabaseQueryResult("places.update", { placeId: place.id, row }, error);
   if (error) throw error;
 }
 
@@ -144,6 +147,7 @@ export async function deleteSupabasePlace(placeId: string): Promise<void> {
 
   const { error } = await client.from("places").delete().eq("id", placeId);
 
+  logSupabaseQueryResult("places.delete", { placeId }, error);
   if (error) throw error;
 }
 
@@ -161,6 +165,13 @@ export async function syncSupabasePlacesDiff(
   const updates = [...nextMap.keys()].filter((id) => {
     if (!prevMap.has(id)) return false;
     return !supabaseFieldsEqual(prevMap.get(id)!, nextMap.get(id)!);
+  });
+
+  console.log("[Supabase Query] places.diff", {
+    tripId,
+    deletes,
+    inserts,
+    updates,
   });
 
   await Promise.all(deletes.map((id) => deleteSupabasePlace(id)));
@@ -188,8 +199,9 @@ export async function migrateLocalPlacesToSupabase(
   const { places, idMap } = preparePlacesForSupabaseMigration(localPlaces);
   const rows = places.map((place) => placeToSupabaseInsert(place, tripId));
 
-  const { error } = await client.from("places").insert(rows);
+  const { data, error } = await client.from("places").insert(rows).select();
 
+  logSupabaseQueryResult("places.migrate", { tripId, rows, data }, error);
   if (error) throw error;
 
   return { places, idMap };

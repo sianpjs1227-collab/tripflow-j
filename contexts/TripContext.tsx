@@ -57,6 +57,20 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     userIdRef.current = user?.id ?? null;
   }, [user?.id]);
 
+  const logContextError = useCallback((label: string, error: unknown) => {
+    const supabaseError = error as {
+      message?: string;
+      code?: string;
+      details?: string;
+    } | null;
+
+    console.error(label, {
+      message: supabaseError?.message ?? null,
+      code: supabaseError?.code ?? null,
+      details: supabaseError?.details ?? null,
+    });
+  }, []);
+
   const fallbackToLocal = useCallback((message: string) => {
     console.error("[TripFlow Trips]", message);
     setStorageMode("local");
@@ -75,12 +89,13 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
           await updateSupabaseTrip(trip);
         }
       } catch (error) {
+        logContextError("[TripFlow Trips] sync error", error);
         const msg =
           error instanceof Error ? error.message : "Supabase 동기화 실패";
         fallbackToLocal(msg);
       }
     },
-    [fallbackToLocal],
+    [fallbackToLocal, logContextError],
   );
 
   const deleteTripFromSupabase = useCallback(
@@ -90,12 +105,13 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       try {
         await deleteSupabaseTrip(tripId);
       } catch (error) {
+        logContextError("[TripFlow Trips] delete error", error);
         const msg =
           error instanceof Error ? error.message : "Supabase 삭제 실패";
         fallbackToLocal(msg);
       }
     },
-    [fallbackToLocal],
+    [fallbackToLocal, logContextError],
   );
 
   useEffect(() => {
@@ -129,6 +145,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
           setHydrated(true);
         }
       } catch (error) {
+        logContextError("[TripFlow Trips] load error", error);
         const msg =
           error instanceof Error ? error.message : "Supabase 여행 로드 실패";
         if (!cancelled) {

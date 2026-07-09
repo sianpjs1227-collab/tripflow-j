@@ -4,7 +4,7 @@ import {
   itineraryRowToEvent,
 } from "@/lib/itinerary-map";
 import { prepareItinerariesForSupabaseMigration } from "@/lib/itinerary-migration";
-import { getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseClient, logSupabaseQueryResult } from "@/lib/supabase";
 import type { Event } from "@/types/event";
 import type { Place } from "@/types/place";
 import type {
@@ -47,6 +47,7 @@ export async function fetchSupabaseItinerariesByTripId(
     .order("day_number", { ascending: true })
     .order("sort_order", { ascending: true });
 
+  logSupabaseQueryResult("itineraries.select", { tripId, tripDates, data }, error);
   if (error) throw error;
 
   return (data as SupabaseItineraryRow[]).map((row) =>
@@ -61,8 +62,9 @@ export async function insertSupabaseItinerary(
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
 
-  const { error } = await client.from("itineraries").insert(row);
+  const { data, error } = await client.from("itineraries").insert(row).select();
 
+  logSupabaseQueryResult("itineraries.insert", { row, data }, error);
   if (error) throw error;
 }
 
@@ -73,12 +75,14 @@ export async function updateSupabaseItinerary(
 ): Promise<void> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
+  const updateRow = itineraryInsertToUpdate(row);
 
   const { error } = await client
     .from("itineraries")
-    .update(itineraryInsertToUpdate(row))
+    .update(updateRow)
     .eq("id", id);
 
+  logSupabaseQueryResult("itineraries.update", { itineraryId: id, row: updateRow }, error);
   if (error) throw error;
 }
 
@@ -94,6 +98,7 @@ export async function deleteSupabaseItinerary(
     .delete()
     .eq("id", itineraryId);
 
+  logSupabaseQueryResult("itineraries.delete", { itineraryId }, error);
   if (error) throw error;
 }
 
@@ -124,6 +129,14 @@ export async function syncSupabaseItinerariesDiff(
   const updates = [...nextMap.keys()].filter((id) => {
     if (!prevMap.has(id)) return false;
     return !itineraryPayloadsEqual(prevMap.get(id)!, nextMap.get(id)!);
+  });
+
+  console.log("[Supabase Query] itineraries.diff", {
+    tripId,
+    tripDates,
+    deletes,
+    inserts,
+    updates,
   });
 
   await Promise.all(deletes.map((id) => deleteSupabaseItinerary(id)));
@@ -159,8 +172,9 @@ export async function migrateLocalItinerariesToSupabase(
     validPlaceIds,
   ).values()];
 
-  const { error } = await client.from("itineraries").insert(rows);
+  const { data, error } = await client.from("itineraries").insert(rows).select();
 
+  logSupabaseQueryResult("itineraries.migrate", { tripId, tripDates, rows, data }, error);
   if (error) throw error;
 
   return migratedEvents;

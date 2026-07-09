@@ -1,6 +1,6 @@
 import { getCurrencyCodeByCountryCode, getCountryFlag } from "@/data/countries";
 import { assignUuidToTripForMigration } from "@/lib/trip-migration";
-import { getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseClient, logSupabaseQueryResult } from "@/lib/supabase";
 import {
   calculateDuration,
   displayDateToIso,
@@ -78,6 +78,7 @@ export async function fetchSupabaseTrips(userId: string): Promise<Trip[]> {
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
+  logSupabaseQueryResult("trips.select", { userId, data }, error);
   if (error) throw error;
 
   return (data as SupabaseTripRow[]).map(supabaseRowToTrip);
@@ -90,11 +91,11 @@ export async function insertSupabaseTrip(
 ): Promise<void> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
+  const row = tripToSupabaseInsert(trip, userId);
 
-  const { error } = await client
-    .from("trips")
-    .insert(tripToSupabaseInsert(trip, userId));
+  const { data, error } = await client.from("trips").insert(row).select();
 
+  logSupabaseQueryResult("trips.insert", { userId, row, data }, error);
   if (error) throw error;
 }
 
@@ -102,12 +103,14 @@ export async function insertSupabaseTrip(
 export async function updateSupabaseTrip(trip: Trip): Promise<void> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
+  const row = tripToSupabaseUpdate(trip);
 
   const { error } = await client
     .from("trips")
-    .update(tripToSupabaseUpdate(trip))
+    .update(row)
     .eq("id", trip.id);
 
+  logSupabaseQueryResult("trips.update", { tripId: trip.id, row }, error);
   if (error) throw error;
 }
 
@@ -118,6 +121,7 @@ export async function deleteSupabaseTrip(tripId: string): Promise<void> {
 
   const { error } = await client.from("trips").delete().eq("id", tripId);
 
+  logSupabaseQueryResult("trips.delete", { tripId }, error);
   if (error) throw error;
 }
 
@@ -137,8 +141,9 @@ export async function migrateLocalTripsToSupabase(
   const migratedTrips = localTrips.map(assignUuidToTripForMigration);
   const rows = migratedTrips.map((trip) => tripToSupabaseInsert(trip, userId));
 
-  const { error } = await client.from("trips").insert(rows);
+  const { data, error } = await client.from("trips").insert(rows).select();
 
+  logSupabaseQueryResult("trips.migrate", { userId, rows, data }, error);
   if (error) throw error;
 
   return migratedTrips;

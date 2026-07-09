@@ -33,6 +33,7 @@ import {
   saveTripDetailDataPreservingRemoteFields,
 } from "@/lib/trip-detail-storage";
 import { getPlaceById, upsertPlace } from "@/lib/place-utils";
+import { isUuid } from "@/lib/supabase";
 
 type DetailStorageMode = "local" | "supabase";
 
@@ -87,6 +88,20 @@ export function TripDetailProvider({
     [tripId],
   );
 
+  const logContextError = useCallback((label: string, error: unknown) => {
+    const supabaseError = error as {
+      message?: string;
+      code?: string;
+      details?: string;
+    } | null;
+
+    console.error(label, {
+      message: supabaseError?.message ?? null,
+      code: supabaseError?.code ?? null,
+      details: supabaseError?.details ?? null,
+    });
+  }, []);
+
   const syncDetailToSupabase = useCallback(
     async (prev: TripDetailData, next: TripDetailData) => {
       if (detailStorageModeRef.current !== "supabase") return;
@@ -107,12 +122,13 @@ export function TripDetailProvider({
           );
         }
       } catch (error) {
+        logContextError("[TripFlow Detail] sync error", error);
         const msg =
           error instanceof Error ? error.message : "Supabase 상세 데이터 동기화 실패";
         fallbackToLocal(msg);
       }
     },
-    [tripId, fallbackToLocal, resolveTripDates],
+    [tripId, fallbackToLocal, logContextError, resolveTripDates],
   );
 
   useEffect(() => {
@@ -125,6 +141,21 @@ export function TripDetailProvider({
       const useSupabase = authMode === "supabase" && user != null;
 
       if (!useSupabase) {
+        if (!cancelled) {
+          tripDatesRef.current = resolveTripDates(localData.events);
+          setDetailStorageMode("local");
+          setData(localData);
+          setHydrated(true);
+        }
+        return;
+      }
+
+      if (!isUuid(tripId)) {
+        console.log("[Supabase Query] detail.skip_non_uuid_trip_id", {
+          tripId,
+          reason:
+            "Trip list fell back to localStorage, so this legacy trip id cannot be queried against uuid trip_id columns.",
+        });
         if (!cancelled) {
           tripDatesRef.current = resolveTripDates(localData.events);
           setDetailStorageMode("local");
@@ -176,6 +207,7 @@ export function TripDetailProvider({
           setHydrated(true);
         }
       } catch (error) {
+        logContextError("[TripFlow Detail] load error", error);
         const msg =
           error instanceof Error ? error.message : "Supabase 상세 데이터 로드 실패";
         if (!cancelled) {

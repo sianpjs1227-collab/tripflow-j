@@ -2,6 +2,8 @@ import { createClient, type SupabaseClient, type User } from "@supabase/supabase
 import type { AuthUser } from "@/types/auth";
 
 let browserClient: SupabaseClient | null = null;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Supabase 환경변수가 설정되어 있는지 */
 export function isSupabaseConfigured(): boolean {
@@ -66,5 +68,33 @@ export async function checkSupabaseConnection(
     return !error;
   } catch {
     return false;
+  }
+}
+
+export function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
+
+type SupabaseErrorLike = {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+} | null;
+
+export function logSupabaseQueryResult(
+  label: string,
+  payload: unknown,
+  error?: SupabaseErrorLike,
+): void {
+  console.log(`[Supabase Query] ${label}`, payload);
+
+  if (error) {
+    console.error(`[Supabase Query Error] ${label}`, {
+      message: error.message ?? null,
+      code: error.code ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+    });
   }
 }
