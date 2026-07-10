@@ -3,6 +3,10 @@ import { Noto_Sans_KR } from "next/font/google";
 import { TripProvider } from "@/contexts/TripContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AuthDevBar from "@/components/auth/AuthDevBar";
+import AuthGate from "@/components/auth/AuthGate";
+import { PWA_CONFIG } from "@/lib/pwa-config";
+import RegisterServiceWorker from "@/components/pwa/RegisterServiceWorker";
+import { PwaInstallProvider } from "@/contexts/PwaInstallContext";
 import "./globals.css";
 
 /**
@@ -18,15 +22,25 @@ const notoSansKR = Noto_Sans_KR({
 
 /** 브라우저 탭에 표시되는 앱 정보 */
 export const metadata: Metadata = {
-  title: "TripFlow J — 여행 계획",
-  description: "계획적인 여행을 위한 여행 계획 앱, TripFlow J",
+  title: PWA_CONFIG.name,
+  description: PWA_CONFIG.description,
+  applicationName: PWA_CONFIG.short_name,
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: PWA_CONFIG.short_name,
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
-/** 모바일 앱처럼 보이도록 뷰포트 설정 */
+/** 모바일·PWA 뷰포트 설정 */
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#F8FAFC",
+  themeColor: PWA_CONFIG.theme_color,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -38,8 +52,13 @@ export default function RootLayout({
     <html lang="ko" className={`${notoSansKR.variable} h-full antialiased light`}>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <AuthProvider>
-          <TripProvider>{children}</TripProvider>
-          <AuthDevBar />
+          <PwaInstallProvider>
+            <AuthGate>
+              <TripProvider>{children}</TripProvider>
+              <AuthDevBar />
+            </AuthGate>
+            <RegisterServiceWorker />
+          </PwaInstallProvider>
         </AuthProvider>
       </body>
     </html>

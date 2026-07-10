@@ -10,7 +10,6 @@ import {
 } from "react";
 import type { AuthMode, AuthUser } from "@/types/auth";
 import {
-  checkSupabaseConnection,
   getSupabaseClient,
   isSupabaseConfigured,
   mapSupabaseUser,
@@ -55,26 +54,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const connected = await checkSupabaseConnection(client);
-      if (!connected) {
-        if (mounted) {
-          setMode("local");
-          setUser(null);
-          setLoading(false);
-        }
-        return;
-      }
+      setMode("supabase");
 
       const { data } = await client.auth.getSession();
       if (!mounted) return;
 
-      setMode("supabase");
       setUser(data.session?.user ? mapSupabaseUser(data.session.user) : null);
 
       const { data: listener } = client.auth.onAuthStateChange(
         (_event, session) => {
           if (!mounted) return;
-          setMode("supabase");
           setUser(session?.user ? mapSupabaseUser(session.user) : null);
         },
       );
@@ -117,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { error } = await client.auth.signOut();
+    const { error } = await client.auth.signOut({ scope: "local" });
     if (error) {
       console.error("[TripFlow Auth] 로그아웃 실패:", error.message);
       return;
