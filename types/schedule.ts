@@ -7,6 +7,8 @@ export interface ScheduleItem {
   id: string;
   date: string;
   time: string;
+  /** 종료 시간 (선택) */
+  endTime?: string;
   title: string;
   /** Place 참조 ID */
   placeId: string;
@@ -25,6 +27,8 @@ export interface ScheduleItem {
 export interface ScheduleInput {
   date: string;
   time: string;
+  /** 종료 시간 (선택, 빈 문자열 = 없음) */
+  endTime: string;
   title: string;
   /** 장소 탭 Place ID */
   placeId: string;

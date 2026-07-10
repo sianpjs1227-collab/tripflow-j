@@ -8,20 +8,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTrips } from "@/contexts/TripContext";
 import type { CreateTripInput, Trip, TripTab } from "@/types/trip";
 import { TripDetailProvider } from "@/contexts/TripDetailContext";
-import { isDepartingToday } from "@/lib/trip-lifecycle";
-import { tripStatusDisplay } from "@/lib/trip-status";
-import { loadMyMapsLink, openMapsUrl } from "@/lib/trip-maps";
+import { loadMyMapsLink } from "@/lib/trip-maps";
 import { fetchMyTripMemberRole } from "@/lib/supabase-trip-members";
-import {
-  Button,
-  Card,
-  CountryFlag,
-  PageContainer,
-  Text,
-} from "@/components/ui";
-import { cn } from "@/lib/cn";
+import { Button, PageContainer } from "@/components/ui";
 import { STICKY_LAYER_VARS, useStickyLayer } from "@/hooks/useStickyLayer";
 import CreateTripModal from "./CreateTripModal";
+import TripInfoCard from "./TripInfoCard";
 import TripInviteSheet from "./TripInviteSheet";
 import TripMoreMenu, {
   type TripSettingsMenuAction,
@@ -48,8 +40,6 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
   const [myMapsUrl, setMyMapsUrl] = useState("");
 
   const currentTrip = getTripById(trip.id) ?? trip;
-  const showDepartingToday = isDepartingToday(currentTrip.startDate);
-  const isMyMapsConnected = Boolean(myMapsUrl);
 
   useEffect(() => {
     setMyMapsUrl(loadMyMapsLink(currentTrip.id));
@@ -112,9 +102,9 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
       <PageContainer constrained className="pb-10">
         <div
           ref={headerRef}
-          className="sticky-layer-header -mx-4 bg-background/95 px-4 pb-2 backdrop-blur-md sm:-mx-5 sm:px-5"
+          className="sticky-layer-header -mx-4 bg-background/95 px-4 pb-1.5 backdrop-blur-md sm:-mx-5 sm:px-5"
         >
-          <div className="flex items-center justify-between gap-3 pt-3 pb-2">
+          <div className="flex items-center justify-between gap-3 pt-2.5 pb-1.5">
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors hover:text-primary/80"
@@ -130,10 +120,10 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsInviteSheetOpen(true)}
-                  className="h-10 w-10 p-0 text-muted"
+                  className="h-9 w-9 p-0 text-muted"
                   aria-label="여행 공유"
                 >
-                  <Share2 className="h-5 w-5" aria-hidden />
+                  <Share2 className="h-4 w-4" aria-hidden />
                 </Button>
               )}
               <TripMoreMenu
@@ -147,97 +137,20 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
           </div>
 
           <section>
-            <Card padding="md" className="overflow-hidden">
-            <div className="flex items-start gap-2.5">
-              <CountryFlag
-                code={currentTrip.countryCode}
-                className="text-2xl leading-none"
-                label={currentTrip.country}
-              />
-              <div className="min-w-0 flex-1">
-                <Text variant="caption" className="font-medium">
-                  {currentTrip.country}
-                </Text>
-                <Text
-                  variant="title-sm"
-                  as="h1"
-                  className="text-xl font-bold leading-tight"
-                >
-                  {currentTrip.city}
-                </Text>
-                {currentTrip.name.trim() &&
-                  currentTrip.name !== currentTrip.city && (
-                    <Text variant="caption" className="mt-0.5">
-                      {currentTrip.name}
-                    </Text>
-                  )}
-              </div>
-            </div>
-
-            <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded-xl bg-background px-2.5 py-2">
-                <Text variant="caption" as="dt">
-                  기간
-                </Text>
-                <Text variant="body-medium" as="dd" className="mt-0.5 text-xs font-semibold">
-                  {currentTrip.startDate} ~ {currentTrip.endDate}
-                </Text>
-              </div>
-              <div className="rounded-xl bg-background px-2.5 py-2">
-                <Text variant="caption" as="dt">
-                  여행일수
-                </Text>
-                <Text variant="body-medium" as="dd" className="mt-0.5 text-xs font-semibold">
-                  {currentTrip.duration}
-                </Text>
-              </div>
-              <div className="col-span-2 flex flex-wrap items-center gap-1.5 sm:col-span-2">
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium",
-                    currentTrip.status === "PLANNING" &&
-                      "bg-success/10 text-success",
-                    currentTrip.status === "TRAVELING" &&
-                      "bg-warning/10 text-warning",
-                    currentTrip.status === "COMPLETED" &&
-                      "bg-muted/15 text-muted",
-                  )}
-                >
-                  {tripStatusDisplay[currentTrip.status]}
-                </span>
-                {showDepartingToday && (
-                  <span className="inline-flex rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
-                    🛫 오늘 출발
-                  </span>
-                )}
-              </div>
-            </dl>
-
-            <span
-              className="mt-3 inline-flex w-full"
-              title={
-                !isMyMapsConnected
-                  ? "Google My Maps를 먼저 연결하세요."
-                  : undefined
-              }
-            >
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!isMyMapsConnected}
-                onClick={() => myMapsUrl && openMapsUrl(myMapsUrl)}
-                className="w-full"
-              >
-                🗺 My Maps 열기
-              </Button>
-            </span>
-          </Card>
-        </section>
+            <TripInfoCard
+              trip={currentTrip}
+              isOwner={isOwner}
+              myMapsUrl={myMapsUrl}
+              onOpenMyMapsManage={() => setIsMyMapsSheetOpen(true)}
+              onOpenShare={() => setIsInviteSheetOpen(true)}
+              onEditTrip={() => setIsEditModalOpen(true)}
+            />
+          </section>
         </div>
 
         <TripTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-        <main className="pt-3">
+        <main className="pt-2.5">
           <div key={activeTab} className="animate-fade-in space-y-4">
             <TripTabContent trip={currentTrip} activeTab={activeTab} />
           </div>

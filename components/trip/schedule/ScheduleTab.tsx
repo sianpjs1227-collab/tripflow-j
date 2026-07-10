@@ -14,6 +14,7 @@ import {
   buildTripDates,
   formatScheduleChipDate,
   groupEventsByDate,
+  sortEvents,
 } from "@/lib/schedule-utils";
 import {
   analyzeDayGaps,
@@ -133,7 +134,8 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
         ? prev.events.map((e) => (e.id === editingItem.id ? event : e))
         : [...prev.events, event];
 
-      return { ...prev, events };
+      // 시작시간 기준 자동 정렬 (날짜 → 시간)
+      return { ...prev, events: sortEvents(events) };
     });
   };
 
@@ -251,7 +253,7 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
   }, [selectedDay, data.expenses, trip, favoriteIds]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-3">
         <Text variant="title-sm" as="h2">
           일정
@@ -270,10 +272,10 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
         <>
           <div
             ref={dayChipsRef}
-            className="sticky-layer-day-chips -mx-4 border-b border-border bg-background/95 px-4 py-2 backdrop-blur-md sm:-mx-5 sm:px-5"
+            className="sticky-layer-day-chips -mx-4 border-b border-border bg-background/95 px-4 py-1.5 backdrop-blur-md sm:-mx-5 sm:px-5"
           >
             <div className="scrollbar-hide overflow-x-auto">
-              <div className="flex w-max gap-2">
+              <div className="flex w-max gap-1.5">
                 {dayTabs.map((day) => {
                   const isSelected = selectedDay?.date === day.date;
 
@@ -282,14 +284,14 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
                       key={day.date}
                       active={isSelected}
                       onClick={() => setSelectedDate(day.date)}
-                      className="min-w-[4.5rem] flex-col gap-0.5 px-3 py-2 transition-all duration-200"
+                      className="min-w-[3.75rem] flex-col gap-0 px-2.5 py-1.5 transition-all duration-200"
                     >
-                      <span className="text-xs font-semibold leading-none">
+                      <span className="text-[11px] font-semibold leading-none">
                         DAY{day.dayNumber}
                       </span>
                       <span
                         className={cn(
-                          "text-[11px] leading-none",
+                          "text-[10px] leading-none",
                           isSelected ? "text-white/85" : "text-muted",
                         )}
                       >

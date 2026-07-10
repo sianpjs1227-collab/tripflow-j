@@ -1,6 +1,7 @@
 import type { PlaceCategory } from "@/types/place";
 import type { ScheduleItem } from "@/types/schedule";
 import { placeCategoryLabels } from "@/lib/place-utils";
+import { inferQuickScheduleFromTitle } from "@/lib/quick-schedule";
 import { Text } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
@@ -59,6 +60,7 @@ export default function ScheduleItemCard({
 }: ScheduleItemCardProps) {
   const hasPlace = item.placeName.trim().length > 0;
   const primaryTitle = hasPlace ? item.placeName : item.title;
+  const quickMatch = inferQuickScheduleFromTitle(item.title);
   const showEventTitle =
     hasPlace &&
     item.title.trim().length > 0 &&
@@ -71,6 +73,11 @@ export default function ScheduleItemCard({
         <time className="text-base font-bold leading-none tracking-tight text-foreground">
           {item.time}
         </time>
+        {item.endTime && (
+          <Text variant="caption" className="mt-1 text-[10px] leading-none">
+            ~{item.endTime}
+          </Text>
+        )}
         {!isLast && (
           <div className="mt-1.5 min-h-3 w-px flex-1 bg-border" aria-hidden />
         )}
@@ -101,7 +108,14 @@ export default function ScheduleItemCard({
               </span>
               {showEventTitle && (
                 <Text variant="caption" className="text-[11px] font-medium">
-                  {item.title}
+                  {quickMatch ? (
+                    <>
+                      <span aria-hidden>{quickMatch.emoji} </span>
+                      {item.title}
+                    </>
+                  ) : (
+                    item.title
+                  )}
                 </Text>
               )}
             </button>
@@ -112,7 +126,14 @@ export default function ScheduleItemCard({
               className="block w-full px-3 pb-1 text-left"
             >
               <p className="text-[17px] font-bold leading-snug text-foreground">
-                {primaryTitle}
+                {quickMatch && !showEventTitle ? (
+                  <>
+                    <span aria-hidden>{quickMatch.emoji} </span>
+                    {primaryTitle}
+                  </>
+                ) : (
+                  primaryTitle
+                )}
               </p>
             </button>
 
@@ -138,7 +159,14 @@ export default function ScheduleItemCard({
             className="w-full px-3 py-2.5 text-left"
           >
             <p className="text-[17px] font-bold leading-snug text-foreground">
-              {primaryTitle}
+              {quickMatch ? (
+                <>
+                  <span aria-hidden>{quickMatch.emoji} </span>
+                  {primaryTitle}
+                </>
+              ) : (
+                primaryTitle
+              )}
             </p>
             {item.memo && (
               <Text

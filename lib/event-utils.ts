@@ -22,6 +22,7 @@ export function toScheduleItem(
     id: event.id,
     date: event.date,
     time: event.time,
+    endTime: event.endTime,
     title: event.title,
     placeId: event.placeId,
     placeName: place?.name ?? "",
@@ -47,10 +48,12 @@ export function buildEventFromInput(
   input: ScheduleInput,
   existingId?: string,
 ): Event {
+  const endTime = input.endTime.trim();
   return {
     id: existingId ?? generateEventId(),
     date: input.date,
     time: input.time,
+    endTime: endTime || undefined,
     title: input.title.trim(),
     placeId: input.placeId,
     memo: input.memo.trim() || undefined,
@@ -62,11 +65,14 @@ export function buildEventFromPlace(
   place: Place,
   date: string,
   time: string,
+  endTime?: string,
 ): Event {
+  const trimmedEnd = endTime?.trim();
   return {
     id: generateEventId(),
     date,
     time,
+    endTime: trimmedEnd || undefined,
     title: getDefaultEventTitleForPlace(place),
     placeId: place.id,
   };

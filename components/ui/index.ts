@@ -7,3 +7,4 @@ export { PageContainer, type PageContainerProps } from "./page-container";
 export { Text, type TextProps, type TextVariant } from "./text";
 export { Textarea, type TextareaProps } from "./textarea";
 export { default as CountryFlag } from "./CountryFlag";
+export { default as TimePicker } from "./TimePicker";

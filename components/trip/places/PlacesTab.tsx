@@ -5,6 +5,7 @@ import { ArrowLeft, MapPin } from "lucide-react";
 import type { AddPlaceToScheduleInput, Place, PlaceInput, PlaceTravelRecordInput } from "@/types/place";
 import { useTripDetail } from "@/contexts/TripDetailContext";
 import { buildEventFromPlace } from "@/lib/event-utils";
+import { sortEvents } from "@/lib/schedule-utils";
 import {
   createPlace,
   filterPlacesByActiveFilter,
@@ -147,10 +148,11 @@ export default function PlacesTab() {
         scheduleTargetPlace,
         input.date,
         input.time,
+        input.endTime,
       );
       return {
         ...prev,
-        events: [...prev.events, event],
+        events: sortEvents([...prev.events, event]),
       };
     });
     setScheduleTargetPlace(null);

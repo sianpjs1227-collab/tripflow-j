@@ -6,8 +6,10 @@ export interface Event {
   id: string;
   /** 날짜 (YYYY-MM-DD) */
   date: string;
-  /** 시간 (HH:mm) */
+  /** 시작 시간 (HH:mm) */
   time: string;
+  /** 종료 시간 (HH:mm, 선택) */
+  endTime?: string;
   /** 일정 제목 */
   title: string;
   /** Place 참조 ID */

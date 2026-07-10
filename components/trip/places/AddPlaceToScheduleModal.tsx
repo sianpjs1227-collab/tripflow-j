@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import type { AddPlaceToScheduleInput } from "@/types/place";
 import type { Place } from "@/types/place";
-import { Button, Input, OverlayLayer, Text } from "@/components/ui";
+import { timeToMinutes } from "@/lib/day-schedule-utils";
+import { Button, Input, OverlayLayer, Text, TimePicker } from "@/components/ui";
 
 interface AddPlaceToScheduleModalProps {
   isOpen: boolean;
@@ -15,6 +17,7 @@ interface AddPlaceToScheduleModalProps {
 const EMPTY_FORM: AddPlaceToScheduleInput = {
   date: "",
   time: "",
+  endTime: "",
 };
 
 /** 장소 → 일정 추가 (날짜·시간만 입력) */
@@ -25,11 +28,13 @@ export default function AddPlaceToScheduleModal({
   onSave,
 }: AddPlaceToScheduleModalProps) {
   const [form, setForm] = useState<AddPlaceToScheduleInput>(EMPTY_FORM);
+  const [showEndTime, setShowEndTime] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (isOpen) {
       setForm(EMPTY_FORM);
+      setShowEndTime(false);
       setError("");
     }
   }, [isOpen, place?.id]);
@@ -40,18 +45,29 @@ export default function AddPlaceToScheduleModal({
     e.preventDefault();
 
     if (!form.date || !form.time) {
-      setError("날짜와 시간을 입력해주세요.");
+      setError("날짜와 시작시간을 입력해주세요.");
       return;
     }
 
-    onSave(form);
+    const endTime = showEndTime ? form.endTime?.trim() ?? "" : "";
+    if (endTime && timeToMinutes(endTime) < timeToMinutes(form.time)) {
+      setError("종료시간은 시작시간 이후여야 합니다.");
+      return;
+    }
+
+    onSave({
+      ...form,
+      endTime: endTime || undefined,
+    });
     setForm(EMPTY_FORM);
+    setShowEndTime(false);
     setError("");
     onClose();
   };
 
   const handleClose = () => {
     setForm(EMPTY_FORM);
+    setShowEndTime(false);
     setError("");
     onClose();
   };
@@ -85,20 +101,42 @@ export default function AddPlaceToScheduleModal({
             />
           </label>
 
-          <label className="block">
-            <Text variant="label" as="span">
-              시간
-            </Text>
-            <Input
-              type="time"
-              value={form.time}
-              onChange={(e) => {
-                setForm((prev) => ({ ...prev, time: e.target.value }));
+          <TimePicker
+            label="🕒 시작시간"
+            value={form.time}
+            onChange={(time) => {
+              setForm((prev) => ({ ...prev, time }));
+              setError("");
+            }}
+            placeholder="시작시간 선택"
+          />
+
+          {showEndTime ? (
+            <TimePicker
+              label="🕒 종료시간"
+              value={form.endTime ?? ""}
+              onChange={(endTime) => {
+                setForm((prev) => ({ ...prev, endTime }));
                 setError("");
               }}
-              className="mt-1"
+              placeholder="종료시간 선택"
+              onClear={() => {
+                setShowEndTime(false);
+                setForm((prev) => ({ ...prev, endTime: "" }));
+              }}
+              clearLabel="제거"
             />
-          </label>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowEndTime(true)}
+              className="h-11 w-full justify-start gap-2 px-1 text-primary"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              종료시간 추가
+            </Button>
+          )}
 
           {error && (
             <Text variant="body" className="text-danger" role="alert">

@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import type { Place, PlaceInput } from "@/types/place";
 import type { ScheduleInput, ScheduleItem } from "@/types/schedule";
 import { getPlaceById, placeCategoryIcons } from "@/lib/place-utils";
+import { timeToMinutes } from "@/lib/day-schedule-utils";
 import {
   Button,
   Card,
@@ -11,8 +13,10 @@ import {
   OverlayLayer,
   Text,
   Textarea,
+  TimePicker,
 } from "@/components/ui";
 import PlacePickerModal from "./PlacePickerModal";
+import QuickScheduleSelect from "./QuickScheduleSelect";
 
 interface ScheduleModalProps {
   isOpen: boolean;
@@ -30,13 +34,14 @@ interface ScheduleModalProps {
 const EMPTY_FORM: ScheduleInput = {
   date: "",
   time: "",
+  endTime: "",
   title: "",
   placeId: "",
   memo: "",
 };
 
 /**
- * 일정 추가/수정 모달
+ * 일정 추가/수정 모달 — Quick Schedule + Time Picker
  */
 export default function ScheduleModal({
   isOpen,
@@ -50,8 +55,10 @@ export default function ScheduleModal({
   onDelete,
 }: ScheduleModalProps) {
   const [form, setForm] = useState<ScheduleInput>(EMPTY_FORM);
+  const [showEndTime, setShowEndTime] = useState(false);
   const [error, setError] = useState("");
   const [isPlacePickerOpen, setIsPlacePickerOpen] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const isEditing = editingItem !== null;
 
   const selectedPlace = useMemo(
@@ -63,22 +70,28 @@ export default function ScheduleModal({
     if (!isOpen) return;
 
     if (editingItem) {
+      const endTime = editingItem.endTime?.trim() ?? "";
       setForm({
         date: editingItem.date,
         time: editingItem.time,
+        endTime,
         title: editingItem.title,
         placeId: editingItem.placeId,
         memo: editingItem.memo ?? "",
       });
+      setShowEndTime(Boolean(endTime));
     } else {
+      const endTime = initialForm?.endTime?.trim() ?? "";
       setForm({
         ...EMPTY_FORM,
         date: initialForm?.date ?? defaultDate,
         time: initialForm?.time ?? "",
+        endTime,
         title: initialForm?.title ?? "",
         placeId: initialForm?.placeId ?? "",
         memo: initialForm?.memo ?? "",
       });
+      setShowEndTime(Boolean(endTime));
     }
     setError("");
     setIsPlacePickerOpen(false);
@@ -87,6 +100,16 @@ export default function ScheduleModal({
   const handleChange = (field: keyof ScheduleInput, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setError("");
+  };
+
+  const handleQuickTitle = (title: string) => {
+    handleChange("title", title);
+  };
+
+  const focusTitleInput = () => {
+    window.setTimeout(() => {
+      titleInputRef.current?.focus();
+    }, 50);
   };
 
   const handlePlaceSelect = (place: Place) => {
@@ -99,7 +122,7 @@ export default function ScheduleModal({
     e.preventDefault();
 
     if (!form.date || !form.time || !form.title.trim()) {
-      setError("날짜, 시간, 일정 제목을 입력해주세요.");
+      setError("날짜, 시작시간, 일정 제목을 입력해주세요.");
       return;
     }
 
@@ -108,8 +131,18 @@ export default function ScheduleModal({
       return;
     }
 
-    onSave(form);
+    const endTime = showEndTime ? form.endTime.trim() : "";
+    if (endTime && timeToMinutes(endTime) < timeToMinutes(form.time)) {
+      setError("종료시간은 시작시간 이후여야 합니다.");
+      return;
+    }
+
+    onSave({
+      ...form,
+      endTime,
+    });
     setForm(EMPTY_FORM);
+    setShowEndTime(false);
     setError("");
     onClose();
   };
@@ -119,12 +152,14 @@ export default function ScheduleModal({
     if (!confirm("이 일정을 삭제할까요?")) return;
     onDelete(editingItem.id);
     setForm(EMPTY_FORM);
+    setShowEndTime(false);
     setError("");
     onClose();
   };
 
   const handleClose = () => {
     setForm(EMPTY_FORM);
+    setShowEndTime(false);
     setError("");
     setIsPlacePickerOpen(false);
     onClose();
@@ -155,27 +190,53 @@ export default function ScheduleModal({
               />
             </label>
 
-            <label className="block">
-              <Text variant="label" as="span">
-                시간
-              </Text>
-              <Input
-                type="time"
-                value={form.time}
-                onChange={(e) => handleChange("time", e.target.value)}
-                className="mt-1"
+            <TimePicker
+              label="🕒 시작시간"
+              value={form.time}
+              onChange={(time) => handleChange("time", time)}
+              placeholder="시작시간 선택"
+            />
+
+            {showEndTime ? (
+              <TimePicker
+                label="🕒 종료시간"
+                value={form.endTime}
+                onChange={(endTime) => handleChange("endTime", endTime)}
+                placeholder="종료시간 선택"
+                onClear={() => {
+                  setShowEndTime(false);
+                  handleChange("endTime", "");
+                }}
+                clearLabel="제거"
               />
-            </label>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setShowEndTime(true)}
+                className="h-11 w-full justify-start gap-2 px-1 text-primary"
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                종료시간 추가
+              </Button>
+            )}
+
+            <QuickScheduleSelect
+              title={form.title}
+              onSelectTitle={handleQuickTitle}
+              onRequestCustomTitle={focusTitleInput}
+            />
 
             <label className="block">
               <Text variant="label" as="span">
                 일정 제목
               </Text>
               <Input
+                ref={titleInputRef}
                 type="text"
                 value={form.title}
                 onChange={(e) => handleChange("title", e.target.value)}
-                placeholder="예: 점심"
+                placeholder="빠른 선택 또는 직접 입력"
                 className="mt-1"
               />
             </label>

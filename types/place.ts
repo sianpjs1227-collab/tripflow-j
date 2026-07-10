@@ -72,4 +72,6 @@ export interface PlaceInput {
 export interface AddPlaceToScheduleInput {
   date: string;
   time: string;
+  /** 종료 시간 (선택) */
+  endTime?: string;
 }
