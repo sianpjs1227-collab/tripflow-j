@@ -8,13 +8,18 @@ import {
   type GeoPosition,
 } from "@/lib/directions";
 import { Button } from "@/components/ui";
+import { cn } from "@/lib/cn";
 
 interface NearbyPlacesButtonProps {
   onOpen: (position: GeoPosition) => void;
+  className?: string;
 }
 
 /** 내 주변 진입 버튼 */
-export default function NearbyPlacesButton({ onOpen }: NearbyPlacesButtonProps) {
+export default function NearbyPlacesButton({
+  onOpen,
+  className,
+}: NearbyPlacesButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleClick = async () => {
@@ -38,9 +43,9 @@ export default function NearbyPlacesButton({ onOpen }: NearbyPlacesButtonProps) 
         void handleClick();
       }}
       disabled={isLoading}
-      className="w-full"
+      className={cn("h-8 text-[11px]", className)}
     >
-      <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+      <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
       {isLoading ? "위치 확인 중…" : "내 주변"}
     </Button>
   );

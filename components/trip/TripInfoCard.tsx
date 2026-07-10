@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Share2, Users } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Trip } from "@/types/trip";
 import { isDepartingToday } from "@/lib/trip-lifecycle";
 import { tripStatusDisplay, tripStatusIcon } from "@/lib/trip-status";
@@ -43,14 +43,14 @@ function writeExpanded(tripId: string, expanded: boolean): void {
 }
 
 /**
- * 여행 정보 카드 — 기본 한 줄 + ▼, 펼치면 My Maps·공유·참여자
+ * 여행 정보 카드 — 기본 한 줄 + ▼, 펼치면 My Maps·참여자·설정
  */
 export default function TripInfoCard({
   trip,
-  isOwner,
+  isOwner: _isOwner,
   myMapsUrl,
   onOpenMyMapsManage,
-  onOpenShare,
+  onOpenShare: _onOpenShare,
   onEditTrip,
 }: TripInfoCardProps) {
   const { mode: authMode } = useAuth();
@@ -139,90 +139,75 @@ export default function TripInfoCard({
         </div>
 
         {expanded ? (
-          <ChevronUp
-            className="h-3.5 w-3.5 shrink-0 text-muted"
-            aria-hidden
-          />
+          <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
         ) : (
-          <ChevronDown
-            className="h-3.5 w-3.5 shrink-0 text-muted"
-            aria-hidden
-          />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
         )}
       </button>
 
       {expanded && (
         <div className="space-y-2 border-t border-border px-2.5 pb-2 pt-2 animate-fade-in">
-          {hasCustomName && (
-            <div className="rounded-xl bg-background px-2.5 py-2">
-              <Text variant="caption">여행명</Text>
-              <Text variant="body-medium" className="mt-0.5 text-sm font-semibold">
-                {trip.name}
-              </Text>
-            </div>
-          )}
-
-          <div className="rounded-xl bg-background px-2.5 py-2">
-            <Text variant="caption">국가</Text>
-            <Text variant="body-medium" className="mt-0.5 text-sm font-semibold">
+          <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
+            <CountryFlag
+              code={trip.countryCode}
+              className="shrink-0 text-base leading-none"
+              label={trip.country}
+            />
+            <span>
               {trip.country}
-            </Text>
+              <span className="text-muted"> · </span>
+              {trip.city}
+            </span>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <span
-              className="inline-flex flex-1"
-              title={
-                !isMyMapsConnected
-                  ? "Google My Maps를 먼저 연결하세요."
-                  : undefined
-              }
-            >
+          {hasCustomName && (
+            <Text variant="caption" className="block text-[11px]">
+              {trip.name}
+            </Text>
+          )}
+
+          <div className="rounded-xl border border-border bg-background px-2.5 py-2">
+            <Text variant="caption" className="mb-1.5 block text-[11px] font-medium">
+              My Maps
+            </Text>
+            <div className="flex gap-2">
+              <span
+                className="inline-flex flex-1"
+                title={
+                  !isMyMapsConnected
+                    ? "Google My Maps를 먼저 연결하세요."
+                    : undefined
+                }
+              >
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!isMyMapsConnected}
+                  onClick={() => myMapsUrl && openMapsUrl(myMapsUrl)}
+                  className="h-8 w-full text-[11px]"
+                >
+                  열기
+                </Button>
+              </span>
               <Button
                 type="button"
-                variant="secondary"
+                variant="ghost"
                 size="sm"
-                disabled={!isMyMapsConnected}
-                onClick={() => myMapsUrl && openMapsUrl(myMapsUrl)}
-                className="h-9 w-full text-sm"
+                onClick={onOpenMyMapsManage}
+                className="h-8 flex-1 text-[11px] text-muted"
               >
-                🗺 My Maps 열기
+                설정
               </Button>
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onOpenMyMapsManage}
-              className="h-9 text-sm text-muted"
-            >
-              My Maps 설정
-            </Button>
+            </div>
           </div>
 
-          {isOwner && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={onOpenShare}
-              className="h-9 w-full text-sm"
-            >
-              <Share2 className="h-4 w-4" aria-hidden />
-              여행 공유
-            </Button>
-          )}
-
           {authMode === "supabase" && (
-            <div className="flex items-center gap-2 rounded-xl bg-background px-2.5 py-2">
-              <Users className="h-4 w-4 shrink-0 text-muted" aria-hidden />
-              <div className="min-w-0">
-                <Text variant="caption">참여자</Text>
-                <Text variant="body-medium" className="text-sm font-semibold">
-                  {memberCount == null ? "불러오는 중…" : `${memberCount}명`}
-                </Text>
-              </div>
-            </div>
+            <Text variant="body" className="px-0.5 text-[12px] text-foreground">
+              {memberCount == null
+                ? "참여자 불러오는 중…"
+                : `👥 ${memberCount}명 참여`}
+            </Text>
           )}
 
           <Button
@@ -230,9 +215,9 @@ export default function TripInfoCard({
             variant="ghost"
             size="sm"
             onClick={onEditTrip}
-            className="h-9 w-full justify-start px-1 text-sm text-primary"
+            className="h-8 w-full justify-start px-0.5 text-[12px] text-primary"
           >
-            여행 정보 수정
+            여행 설정
           </Button>
         </div>
       )}

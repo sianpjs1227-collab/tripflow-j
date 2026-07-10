@@ -20,6 +20,7 @@ import type { NearbyPlace } from "@/lib/nearby-utils";
 import { usePlaceFavorites } from "@/hooks/usePlaceFavorites";
 import { usePlaceActionSheet } from "@/hooks/usePlaceActionSheet";
 import { Button, Text } from "@/components/ui";
+import TripTabHeader from "../TripTabHeader";
 import PlaceModal from "./PlaceModal";
 import PlaceActionSheet from "@/components/map/PlaceActionSheet";
 import PlaceCategorySection from "./PlaceCategorySection";
@@ -169,25 +170,16 @@ export default function PlacesTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <Text variant="title-sm" as="h2">
-        장소
-      </Text>
-      <Text variant="muted" className="mt-2">
-        가보고 싶은 장소를 저장하고 일정에 추가하세요.
-      </Text>
+    <div className="space-y-2">
+      <TripTabHeader title="장소" />
 
-      <div className="mt-4">
-        <PlaceSearchBar value={searchQuery} onChange={setSearchQuery} />
-      </div>
+      <PlaceSearchBar value={searchQuery} onChange={setSearchQuery} />
 
       {isNearbyView && (
-        <div className="mt-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
-            <MapPin className="h-4 w-4 shrink-0" aria-hidden />
-            내 주변 검색 중
-          </span>
-        </div>
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+          <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          내 주변 검색 중
+        </span>
       )}
 
       {isNearbyView && nearbyPosition ? (
@@ -196,22 +188,20 @@ export default function PlacesTab() {
             type="button"
             variant="secondary"
             onClick={handleCloseNearby}
-            className="mt-4 w-full justify-start text-primary"
+            className="h-8 w-full justify-start text-[11px] text-primary"
           >
-            <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+            <ArrowLeft className="h-3.5 w-3.5 shrink-0" aria-hidden />
             전체 장소
           </Button>
 
           {data.places.length > 0 && (
-            <div className="mt-5">
-              <PlaceCategoryFilter
-                activeFilter={activeFilter}
-                favoriteCount={totalFavoriteCount}
-                visitedCount={visitedCount}
-                notVisitedCount={notVisitedCount}
-                onChange={setActiveFilter}
-              />
-            </div>
+            <PlaceCategoryFilter
+              activeFilter={activeFilter}
+              favoriteCount={totalFavoriteCount}
+              visitedCount={visitedCount}
+              notVisitedCount={notVisitedCount}
+              onChange={setActiveFilter}
+            />
           )}
 
           <NearbyPlacesResults
@@ -223,33 +213,37 @@ export default function PlacesTab() {
         </>
       ) : (
         <>
-          <div className="mt-4">
-            <NearbyPlacesButton onOpen={handleOpenNearby} />
+          <div className="flex gap-2">
+            <NearbyPlacesButton
+              onOpen={handleOpenNearby}
+              className="min-w-0 flex-1"
+            />
+            <Button
+              type="button"
+              onClick={openAddModal}
+              className="h-8 min-w-0 flex-1 px-2.5 text-[11px]"
+            >
+              ＋ 추가
+            </Button>
           </div>
 
-          <Button type="button" onClick={openAddModal} className="mt-3 w-full">
-            장소 추가
-          </Button>
-
           {data.places.length === 0 ? (
-            <Text variant="muted" className="mt-6">
+            <Text variant="muted" className="py-4 text-center text-[12px]">
               아직 저장된 장소가 없습니다.
             </Text>
           ) : (
             <>
-              <div className="mt-5">
-                <PlaceCategoryFilter
-                  activeFilter={activeFilter}
-                  favoriteCount={totalFavoriteCount}
-                  visitedCount={visitedCount}
-                  notVisitedCount={notVisitedCount}
-                  onChange={setActiveFilter}
-                />
-              </div>
+              <PlaceCategoryFilter
+                activeFilter={activeFilter}
+                favoriteCount={totalFavoriteCount}
+                visitedCount={visitedCount}
+                notVisitedCount={notVisitedCount}
+                onChange={setActiveFilter}
+              />
 
-              <div className="mt-4 space-y-4">
+              <div className="space-y-3">
                 {!hasListResults ? (
-                  <Text variant="muted" className="py-8 text-center">
+                  <Text variant="muted" className="py-6 text-center text-[12px]">
                     {isSearching
                       ? "검색 결과가 없습니다."
                       : activeFilter === "favorites"
@@ -263,7 +257,7 @@ export default function PlacesTab() {
                               : "표시할 장소가 없습니다."}
                   </Text>
                 ) : activeFilter === "rating_sort" ? (
-                  <ul className="space-y-2" role="list">
+                  <ul className="space-y-1.5" role="list">
                     {searchedPlaces.map((place) => (
                       <li key={place.id}>
                         <PlaceListCard

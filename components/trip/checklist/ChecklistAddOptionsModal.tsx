@@ -9,7 +9,7 @@ interface ChecklistAddOptionsModalProps {
   onSelectManual: () => void;
 }
 
-/** 항목 추가 방식 선택 */
+/** 항목 추가 방식 선택 — 간결 버전 */
 export default function ChecklistAddOptionsModal({
   isOpen,
   onClose,
@@ -23,42 +23,33 @@ export default function ChecklistAddOptionsModal({
       onClose={onClose}
       closeLabel="모달 닫기"
     >
-      <Text variant="title-sm" as="h2" className="text-xl font-bold">
-        항목 추가
-      </Text>
-      <Text variant="muted" className="mt-2">
-        추가 방식을 선택하세요.
+      <Text variant="title-sm" as="h2" className="text-lg font-bold">
+        ＋ 추가
       </Text>
 
-      <div className="mt-4 space-y-3">
+      <div className="mt-3 space-y-2">
         <Button
           type="button"
           variant="secondary"
-          className="h-auto w-full justify-start px-4 py-3 text-left"
+          className="h-10 w-full justify-start px-3 text-left text-[13px]"
           onClick={() => {
             onClose();
             onSelectDefaults();
           }}
         >
-          <span className="block text-base font-medium">📋 기본 항목에서 추가</span>
-          <span className="mt-0.5 block text-sm font-normal text-muted">
-            여행 준비 기본 항목 중 선택
-          </span>
+          📋 기본 항목
         </Button>
 
         <Button
           type="button"
           variant="secondary"
-          className="h-auto w-full justify-start px-4 py-3 text-left"
+          className="h-10 w-full justify-start px-3 text-left text-[13px]"
           onClick={() => {
             onClose();
             onSelectManual();
           }}
         >
-          <span className="block text-base font-medium">✏ 직접 입력</span>
-          <span className="mt-0.5 block text-sm font-normal text-muted">
-            원하는 항목을 직접 작성
-          </span>
+          ✏ 직접 입력
         </Button>
       </div>
     </OverlayLayer>

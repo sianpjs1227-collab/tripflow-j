@@ -11,6 +11,7 @@ import {
   updateChecklistItem,
 } from "@/lib/checklist-utils";
 import { Button, Text } from "@/components/ui";
+import TripTabHeader from "../TripTabHeader";
 import ChecklistModal from "./ChecklistModal";
 import ChecklistAddOptionsModal from "./ChecklistAddOptionsModal";
 import ChecklistDefaultPickerModal from "./ChecklistDefaultPickerModal";
@@ -89,26 +90,29 @@ function ChecklistTabContent() {
   };
 
   return (
-    <div className="space-y-4">
-      <Text variant="title-sm" as="h2">
-        체크리스트
-      </Text>
-      {items.length > 0 && (
-        <Text variant="muted" className="mt-2">
-          {checkedCount}/{items.length} 완료
-        </Text>
-      )}
-
-      <Button type="button" onClick={openAddOptions} className="w-full">
-        항목 추가
-      </Button>
+    <div className="space-y-2">
+      <TripTabHeader
+        title="체크리스트"
+        meta={items.length > 0 ? `${checkedCount}/${items.length} 완료` : undefined}
+        onAdd={openAddOptions}
+      />
 
       {items.length === 0 ? (
-        <Text variant="muted" className="mt-6">
-          아직 등록된 항목이 없습니다.
-        </Text>
+        <div className="space-y-2 py-2">
+          <Text variant="muted" className="text-center text-[12px]">
+            아직 등록된 항목이 없습니다.
+          </Text>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setIsDefaultPickerOpen(true)}
+            className="h-8 w-full text-[11px]"
+          >
+            기본 항목에서 고르기
+          </Button>
+        </div>
       ) : (
-        <div className="mt-6 space-y-2">
+        <div className="space-y-1.5">
           {groupedItems.map((group) => (
             <ChecklistCategorySection
               key={group.category}

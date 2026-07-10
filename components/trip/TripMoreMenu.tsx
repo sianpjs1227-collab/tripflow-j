@@ -34,7 +34,7 @@ const MENU_ITEMS: TripSettingsMenuItem[] = [
   },
   {
     id: "edit-trip",
-    label: "여행 정보 수정",
+    label: "여행 설정",
     icon: Pencil,
   },
   {

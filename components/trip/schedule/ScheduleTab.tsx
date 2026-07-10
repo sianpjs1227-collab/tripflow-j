@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Map as MapIcon, Plus, Route } from "lucide-react";
+import { Map as MapIcon, Route } from "lucide-react";
 import type { Trip } from "@/types/trip";
 import type { Place, PlaceInput, PlaceTravelRecordInput } from "@/types/place";
 import type { ScheduleInput, ScheduleItem } from "@/types/schedule";
@@ -35,6 +35,7 @@ import { tripHasExchangeRate } from "@/lib/currency-utils";
 import { STICKY_LAYER_VARS, useStickyLayer } from "@/hooks/useStickyLayer";
 import { Button, Card, Chip, Text } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import TripTabHeader from "../TripTabHeader";
 import ScheduleModal from "./ScheduleModal";
 import DayGapSection from "./DayGapSection";
 import DaySummaryCard from "./DaySummaryCard";
@@ -246,15 +247,7 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <Text variant="title-sm" as="h2" className="text-base">
-          일정
-        </Text>
-        <Button type="button" onClick={openCreateModal} size="sm" className="h-8 shrink-0 px-2.5 text-[11px]">
-          <Plus className="h-3.5 w-3.5" aria-hidden />
-          추가
-        </Button>
-      </div>
+      <TripTabHeader title="일정" onAdd={openCreateModal} />
 
       {dayTabs.length === 0 ? (
         <Text variant="muted" className="py-6 text-center">
@@ -328,12 +321,11 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
                           size="sm"
                           className="mt-4"
                         >
-                          <Plus className="h-4 w-4" aria-hidden />
-                          일정 추가
+                          ＋ 추가
                         </Button>
                       </Card>
                     ) : (
-                      <ul className="space-y-0" role="list">
+                      <ul className="space-y-1.5" role="list">
                         {selectedDay.items.map((item, index) => {
                           const place = getPlaceById(data.places, item.placeId);
 
