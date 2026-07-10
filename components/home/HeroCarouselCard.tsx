@@ -10,8 +10,8 @@ import {
   getTravelDayProgress,
   getTripDDayLabel,
   getTripDisplayName,
-  getTripHomeStats,
 } from "@/lib/trip-home-utils";
+import { useTripHomeStats } from "@/hooks/useTripHomeStats";
 import { Button, Card, CountryFlag, Text } from "@/components/ui";
 import TripCover from "./TripCover";
 
@@ -57,7 +57,7 @@ export default function HeroCarouselCard({
   const menuRef = useRef<HTMLDivElement>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const stats = getTripHomeStats(trip);
+  const stats = useTripHomeStats(trip);
   const schedule = getHeroScheduleSnapshot(trip);
   const progress = getTravelDayProgress(trip);
   const displayName = getTripDisplayName(trip);

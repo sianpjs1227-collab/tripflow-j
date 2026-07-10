@@ -68,6 +68,10 @@ export interface Trip {
   exchangeRateUpdatedAt?: string | null;
   /** 커버 이미지 (data URL, 선택) */
   coverImage?: string;
+  /** Google My Maps map id (mid) */
+  myMapsMapId?: string | null;
+  /** Google My Maps viewer/share URL */
+  myMapsViewerUrl?: string | null;
 }
 
 /** 새 여행 입력 폼 데이터 */

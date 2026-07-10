@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTrips } from "@/contexts/TripContext";
 import type { CreateTripInput, Trip, TripTab } from "@/types/trip";
 import { TripDetailProvider } from "@/contexts/TripDetailContext";
-import { loadMyMapsLink } from "@/lib/trip-maps";
+import { getMyMapsConnectionFromTrip } from "@/lib/trip-maps";
 import { fetchMyTripMemberRole } from "@/lib/supabase-trip-members";
 import { Button, PageContainer } from "@/components/ui";
 import { STICKY_LAYER_VARS, useStickyLayer } from "@/hooks/useStickyLayer";
@@ -37,13 +37,10 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isInviteSheetOpen, setIsInviteSheetOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
-  const [myMapsUrl, setMyMapsUrl] = useState("");
 
   const currentTrip = getTripById(trip.id) ?? trip;
-
-  useEffect(() => {
-    setMyMapsUrl(loadMyMapsLink(currentTrip.id));
-  }, [currentTrip.id, isMyMapsSheetOpen]);
+  const myMapsUrl =
+    getMyMapsConnectionFromTrip(currentTrip)?.viewerUrl ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -69,10 +66,6 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
       cancelled = true;
     };
   }, [authMode, user, currentTrip.id]);
-
-  const refreshMyMapsLink = () => {
-    setMyMapsUrl(loadMyMapsLink(currentTrip.id));
-  };
 
   const handleSettingsAction = (action: TripSettingsMenuAction) => {
     switch (action) {
@@ -168,7 +161,6 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
         tripId={currentTrip.id}
         isOpen={isMyMapsSheetOpen}
         onClose={() => setIsMyMapsSheetOpen(false)}
-        onConnectionChange={refreshMyMapsLink}
       />
 
       <TripInviteSheet

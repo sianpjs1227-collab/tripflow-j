@@ -19,6 +19,8 @@ export interface SupabaseTripRow {
   exchange_rate_date?: string | null;
   exchange_rate_unit?: number | string | null;
   exchange_rate_provider?: string | null;
+  my_maps_map_id?: string | null;
+  my_maps_viewer_url?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +42,8 @@ export interface SupabaseTripInsert {
   exchange_rate_date?: string | null;
   exchange_rate_unit?: number | null;
   exchange_rate_provider?: ExchangeRateProvider | null;
+  my_maps_map_id?: string | null;
+  my_maps_viewer_url?: string | null;
 }
 
 export interface SupabaseTripUpdate {
@@ -58,4 +62,6 @@ export interface SupabaseTripUpdate {
   exchange_rate_date?: string | null;
   exchange_rate_unit?: number | null;
   exchange_rate_provider?: ExchangeRateProvider | null;
+  my_maps_map_id?: string | null;
+  my_maps_viewer_url?: string | null;
 }

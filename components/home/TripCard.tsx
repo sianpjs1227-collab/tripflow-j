@@ -14,10 +14,10 @@ import { isDepartingToday } from "@/lib/trip-lifecycle";
 import {
   getTravelDayProgress,
   getTripDisplayName,
-  getTripHomeStats,
   getTripStatusBadge,
   tripStatusToneClass,
 } from "@/lib/trip-home-utils";
+import { useTripHomeStats } from "@/hooks/useTripHomeStats";
 import { Button, Card, CountryFlag, Text } from "@/components/ui";
 import TripCover from "./TripCover";
 
@@ -39,7 +39,7 @@ export default function TripCard({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const showDepartingToday = isDepartingToday(trip.startDate);
-  const stats = getTripHomeStats(trip);
+  const stats = useTripHomeStats(trip);
   const statusBadge = getTripStatusBadge(trip);
   const progress = getTravelDayProgress(trip);
   const displayName = getTripDisplayName(trip);

@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import type { MyMapsConnection } from "@/types/mymaps";
+import { useTrips } from "@/contexts/TripContext";
 import {
   extractMapIdFromUrl,
-  deleteMyMapsLink,
-  loadMyMapsConnection,
+  getMyMapsConnectionFromTrip,
+  normalizeMapsUrl,
   openMapsUrl,
-  saveMyMapsLink,
 } from "@/lib/trip-maps";
 import { Button, Card, Input, OverlayLayer, Text } from "@/components/ui";
 import KmlImportButton from "@/components/trip/places/KmlImportButton";
@@ -27,6 +27,7 @@ export default function TripMyMapsManageSheet({
   onClose,
   onConnectionChange,
 }: TripMyMapsManageSheetProps) {
+  const { getTripById, patchTripMyMaps, trips } = useTrips();
   const [inputLink, setInputLink] = useState("");
   const [connection, setConnection] = useState<MyMapsConnection | null>(null);
   const [linkError, setLinkError] = useState("");
@@ -34,11 +35,12 @@ export default function TripMyMapsManageSheet({
   useEffect(() => {
     if (!isOpen) return;
 
-    const stored = loadMyMapsConnection(tripId);
+    const trip = getTripById(tripId);
+    const stored = trip ? getMyMapsConnectionFromTrip(trip) : null;
     setConnection(stored);
     setInputLink(stored?.viewerUrl ?? "");
     setLinkError("");
-  }, [tripId, isOpen]);
+  }, [tripId, isOpen, getTripById, trips]);
 
   const isConnected = Boolean(connection?.mapId);
 
@@ -51,12 +53,12 @@ export default function TripMyMapsManageSheet({
       return;
     }
 
-    const saved = saveMyMapsLink(tripId, inputLink);
-    if (!saved) {
-      setLinkError("링크를 저장할 수 없습니다.");
-      return;
-    }
+    const saved: MyMapsConnection = {
+      mapId,
+      viewerUrl: normalizeMapsUrl(inputLink),
+    };
 
+    patchTripMyMaps(tripId, saved);
     setConnection(saved);
     onConnectionChange?.();
   };
@@ -64,7 +66,7 @@ export default function TripMyMapsManageSheet({
   const handleDisconnect = () => {
     if (!confirm("Google My Maps 연결을 해제할까요?")) return;
 
-    deleteMyMapsLink(tripId);
+    patchTripMyMaps(tripId, null);
     setConnection(null);
     setInputLink("");
     onConnectionChange?.();
@@ -112,7 +114,7 @@ export default function TripMyMapsManageSheet({
               setInputLink(event.target.value);
               setLinkError("");
             }}
-            placeholder="https://www.google.com/maps/d/viewer?mid=..."
+            placeholder={`https://www.google.com/maps/d/viewer?mid=${"..."}`}
           />
           <Text variant="caption">
             저장된 링크로 My Maps를 바로 열 수 있습니다.

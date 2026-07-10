@@ -167,6 +167,8 @@ export function normalizeTrip(raw: LegacyTrip): Trip {
     exchangeRateProvider,
     exchangeRateUpdatedAt: raw.exchangeRateUpdatedAt ?? null,
     coverImage: raw.coverImage || undefined,
+    myMapsMapId: raw.myMapsMapId ?? null,
+    myMapsViewerUrl: raw.myMapsViewerUrl ?? null,
   };
 }
 

@@ -5,6 +5,7 @@ import {
 } from "@/lib/trip-detail-storage";
 import {
   deleteMyMapsLink,
+  hydrateTripMyMapsFromLegacyStorage,
   loadMyMapsConnection,
   saveMyMapsConnection,
 } from "@/lib/trip-maps";
@@ -39,7 +40,8 @@ export function remapTripLocalReferences(
 
 /** LocalStorage 여행을 Supabase용 UUID id로 변환 */
 export function assignUuidToTripForMigration(trip: Trip): Trip {
+  const hydrated = hydrateTripMyMapsFromLegacyStorage(trip);
   const newId = crypto.randomUUID();
   remapTripLocalReferences(trip.id, newId);
-  return { ...trip, id: newId };
+  return { ...hydrated, id: newId };
 }

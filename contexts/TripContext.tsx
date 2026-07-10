@@ -24,8 +24,9 @@ import {
   updateSupabaseTrip,
 } from "@/lib/supabase-trips";
 import { deleteTripDetailData } from "@/lib/trip-detail-storage";
-import { deleteMyMapsLink } from "@/lib/trip-maps";
+import { deleteMyMapsLink, hydrateTripMyMapsFromLegacyStorage, syncMyMapsLegacyStorage, tripHasMyMaps } from "@/lib/trip-maps";
 import type { CreateTripInput, Trip, TripStatus } from "@/types/trip";
+import type { MyMapsConnection } from "@/types/mymaps";
 import { tripHasExchangeRate } from "@/lib/currency-utils";
 
 type TripStorageMode = "local" | "supabase";
@@ -48,6 +49,26 @@ function mergeTripExchangeFromLocal(remote: Trip, local?: Trip): Trip {
   };
 }
 
+function mergeTripMyMapsFromLocal(remote: Trip, local?: Trip): Trip {
+  if (tripHasMyMaps(remote)) return remote;
+
+  const localTrip = local && tripHasMyMaps(local) ? local : null;
+  const legacyTrip = hydrateTripMyMapsFromLegacyStorage(remote);
+  const source = localTrip ?? (tripHasMyMaps(legacyTrip) ? legacyTrip : null);
+  if (!source) return remote;
+
+  return {
+    ...remote,
+    myMapsMapId: source.myMapsMapId ?? null,
+    myMapsViewerUrl: source.myMapsViewerUrl ?? null,
+  };
+}
+
+function mergeTripFromLocal(remote: Trip, local?: Trip): Trip {
+  const withExchange = mergeTripExchangeFromLocal(remote, local);
+  return mergeTripMyMapsFromLocal(withExchange, local);
+}
+
 interface TripContextValue {
   trips: Trip[];
   addTrip: (input: CreateTripInput) => Trip;
@@ -63,6 +84,7 @@ interface TripContextValue {
       exchangeRateUpdatedAt?: string | null;
     },
   ) => void;
+  patchTripMyMaps: (id: string, connection: MyMapsConnection | null) => void;
   setTripStatus: (id: string, status: TripStatus) => void;
   resetTripStatusAuto: (id: string) => void;
   deleteTrip: (id: string) => void;
@@ -155,7 +177,11 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       if (!useSupabase) {
         if (!cancelled) {
           setStorageMode("local");
-          setTrips(loadTripsFromLocalStorage());
+          setTrips(
+            loadTripsFromLocalStorage().map((trip) =>
+              hydrateTripMyMapsFromLegacyStorage(trip),
+            ),
+          );
           setHydrated(true);
         }
         return;
@@ -167,16 +193,21 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
         const localById = new Map(localTrips.map((trip) => [trip.id, trip]));
 
         if (remoteTrips.length === 0 && localTrips.length > 0) {
-          remoteTrips = await migrateLocalTripsToSupabase(user.id, localTrips);
+          remoteTrips = await migrateLocalTripsToSupabase(
+            user.id,
+            localTrips.map((trip) => hydrateTripMyMapsFromLegacyStorage(trip)),
+          );
         } else if (remoteTrips.length > 0) {
           remoteTrips = remoteTrips.map((remote) => {
-            const merged = mergeTripExchangeFromLocal(
-              remote,
-              localById.get(remote.id),
-            );
+            const merged = mergeTripFromLocal(remote, localById.get(remote.id));
             const remoteHadRate = tripHasExchangeRate(remote);
             const mergedHasRate = tripHasExchangeRate(merged);
-            if (!remoteHadRate && mergedHasRate) {
+            const remoteHadMyMaps = tripHasMyMaps(remote);
+            const mergedHasMyMaps = tripHasMyMaps(merged);
+            if (
+              (!remoteHadRate && mergedHasRate) ||
+              (!remoteHadMyMaps && mergedHasMyMaps)
+            ) {
               void updateSupabaseTrip(merged);
             }
             return merged;
@@ -293,6 +324,28 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     [syncTripToSupabase],
   );
 
+  const patchTripMyMaps = useCallback(
+    (id: string, connection: MyMapsConnection | null) => {
+      setTrips((prev) => {
+        const next = prev.map((trip) => {
+          if (trip.id !== id) return trip;
+          return {
+            ...trip,
+            myMapsMapId: connection?.mapId ?? null,
+            myMapsViewerUrl: connection?.viewerUrl ?? null,
+          };
+        });
+        const updated = next.find((trip) => trip.id === id);
+        if (updated) {
+          syncMyMapsLegacyStorage(id, connection);
+          void syncTripToSupabase(updated, "update");
+        }
+        return next;
+      });
+    },
+    [syncTripToSupabase],
+  );
+
   const setTripStatus = useCallback(
     (id: string, status: TripStatus) => {
       setTrips((prev) => {
@@ -347,6 +400,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       addTrip,
       updateTrip,
       patchTripExchangeRate,
+      patchTripMyMaps,
       setTripStatus,
       resetTripStatusAuto,
       deleteTrip,
@@ -357,6 +411,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       addTrip,
       updateTrip,
       patchTripExchangeRate,
+      patchTripMyMaps,
       setTripStatus,
       resetTripStatusAuto,
       deleteTrip,

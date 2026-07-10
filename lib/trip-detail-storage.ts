@@ -9,6 +9,7 @@ import {
 import { normalizePlaceVisit } from "@/lib/place-visit";
 import { normalizeNote } from "@/lib/note-utils";
 import type { Note } from "@/types/note";
+import { notifyTripDetailUpdated } from "@/lib/trip-detail-events";
 
 const STORAGE_KEY = "tripflow-trip-details";
 
@@ -108,6 +109,7 @@ export function saveTripDetailData(tripId: string, data: TripDetailData): void {
   const store = readStore();
   store[tripId] = data;
   writeStore(store);
+  notifyTripDetailUpdated(tripId);
 }
 
 /** places·events 를 제외한 나머지 상세 데이터만 저장 (Supabase 모드용) */

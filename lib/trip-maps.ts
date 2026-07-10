@@ -1,6 +1,53 @@
 import type { MyMapsConnection } from "@/types/mymaps";
+import type { Trip } from "@/types/trip";
 
-/** Google Maps URL 정규화 */
+/** Trip 에 My Maps 연결이 있는지 */
+export function tripHasMyMaps(
+  trip: Pick<Trip, "myMapsMapId">,
+): boolean {
+  return Boolean(trip.myMapsMapId?.trim());
+}
+
+/** Trip 메타데이터 → My Maps 연결 정보 */
+export function getMyMapsConnectionFromTrip(
+  trip: Pick<Trip, "myMapsMapId" | "myMapsViewerUrl">,
+): MyMapsConnection | null {
+  const mapId = trip.myMapsMapId?.trim();
+  if (!mapId) return null;
+
+  const viewerUrl = trip.myMapsViewerUrl?.trim();
+  return {
+    mapId,
+    viewerUrl: viewerUrl || buildMyMapsViewerUrl(mapId),
+  };
+}
+
+/** 레거시 localStorage 키에서 Trip 필드 보강 */
+export function hydrateTripMyMapsFromLegacyStorage(trip: Trip): Trip {
+  if (tripHasMyMaps(trip)) return trip;
+
+  const legacy = loadMyMapsConnection(trip.id);
+  if (!legacy) return trip;
+
+  return {
+    ...trip,
+    myMapsMapId: legacy.mapId,
+    myMapsViewerUrl: legacy.viewerUrl,
+  };
+}
+
+/** TripContext 저장 시 레거시 localStorage 캐시 동기화 */
+export function syncMyMapsLegacyStorage(
+  tripId: string,
+  connection: MyMapsConnection | null,
+): void {
+  if (connection) {
+    saveMyMapsConnection(tripId, connection);
+    return;
+  }
+  deleteMyMapsLink(tripId);
+}
+
 export function normalizeMapsUrl(url: string): string {
   const trimmed = url.trim();
   return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;

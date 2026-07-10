@@ -87,12 +87,25 @@ function tripToSupabaseExchangeFields(
   };
 }
 
+function tripToSupabaseMyMapsFields(
+  trip: Trip,
+): Pick<SupabaseTripInsert, "my_maps_map_id" | "my_maps_viewer_url"> {
+  const mapId = trip.myMapsMapId?.trim() || null;
+  const viewerUrl = trip.myMapsViewerUrl?.trim() || null;
+
+  return {
+    my_maps_map_id: mapId,
+    my_maps_viewer_url: viewerUrl,
+  };
+}
+
 function tripToSupabaseInsert(trip: Trip, userId: string): SupabaseTripInsert {
   return {
     id: trip.id,
     user_id: userId,
     ...tripToSupabaseCoreFields(trip),
     ...tripToSupabaseExchangeFields(trip),
+    ...tripToSupabaseMyMapsFields(trip),
   };
 }
 
@@ -100,6 +113,7 @@ function tripToSupabaseUpdate(trip: Trip): SupabaseTripUpdate {
   return {
     ...tripToSupabaseCoreFields(trip),
     ...tripToSupabaseExchangeFields(trip),
+    ...tripToSupabaseMyMapsFields(trip),
     updated_at: new Date().toISOString(),
   };
 }
@@ -180,6 +194,8 @@ export function supabaseRowToTrip(row: SupabaseTripRow): Trip {
         : null,
     exchangeRateUpdatedAt: row.exchange_rate_updated_at ?? null,
     coverImage: row.cover_image ?? undefined,
+    myMapsMapId: row.my_maps_map_id ?? null,
+    myMapsViewerUrl: row.my_maps_viewer_url ?? null,
   });
 }
 

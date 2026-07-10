@@ -45,7 +45,6 @@ import type { Event } from "@/types/event";
 import {
   loadTripDetailData,
   saveTripDetailData,
-  saveTripDetailDataPreservingRemoteFields,
 } from "@/lib/trip-detail-storage";
 import { getPlaceById, upsertPlace } from "@/lib/place-utils";
 import { isUuid } from "@/lib/supabase";
@@ -321,20 +320,8 @@ export function TripDetailProvider({
 
   useEffect(() => {
     if (!hydrated) return;
-
-    if (detailStorageMode === "local") {
-      saveTripDetailData(tripId, data);
-      return;
-    }
-
-    saveTripDetailDataPreservingRemoteFields(tripId, data, {
-      places: true,
-      events: true,
-      expenses: true,
-      checklist: true,
-      notes: true,
-    });
-  }, [tripId, data, hydrated, detailStorageMode]);
+    saveTripDetailData(tripId, data);
+  }, [tripId, data, hydrated]);
 
   const updateData = useCallback(
     (updater: (prev: TripDetailData) => TripDetailData) => {
