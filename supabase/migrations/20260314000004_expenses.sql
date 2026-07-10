@@ -1,6 +1,5 @@
--- TripFlow J — expenses 테이블 (Supabase SQL Editor에서 실행)
-
-create extension if not exists "pgcrypto";
+-- TripFlow J — expenses
+-- supabase migration: create expenses table + RLS
 
 create table if not exists public.expenses (
   id uuid primary key default gen_random_uuid(),

@@ -1,6 +1,5 @@
--- TripFlow J — memos 테이블 (Supabase SQL Editor에서 실행)
-
-create extension if not exists "pgcrypto";
+-- TripFlow J — memos
+-- supabase migration: create memos table + RLS
 
 create table if not exists public.memos (
   id uuid primary key default gen_random_uuid(),
