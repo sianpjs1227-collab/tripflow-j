@@ -51,34 +51,40 @@ export default function PlaceListCard({
           {placeCategoryIcons[place.category]}
         </span>
         <div className="min-w-0 flex-1">
-          <Text variant="body-medium" className="text-base font-semibold">
+          <Text variant="body-medium" className="text-[13px] font-semibold leading-snug">
             {place.name}
           </Text>
           {detail && !recordMemo && (
-            <Text variant="muted" className="mt-1">
+            <Text variant="muted" className="mt-0.5 text-[12px]">
               {detail}
             </Text>
           )}
           {hasRecord && (
-            <div className="mt-2 space-y-1.5">
+            <div className="mt-1.5 space-y-1">
               {visited && visitBadge && (
-                <div className="inline-flex flex-col rounded-xl bg-success/10 px-2.5 py-1.5">
-                  <Text variant="caption" className="font-semibold text-success">
+                <div className="inline-flex flex-col rounded-lg bg-success/10 px-2 py-1">
+                  <Text
+                    variant="caption"
+                    className="text-[11px] font-semibold text-success"
+                  >
                     ✅ 방문
                   </Text>
-                  <Text variant="caption" className="mt-0.5 text-success/80">
+                  <Text
+                    variant="caption"
+                    className="mt-0.5 text-[11px] text-success/80"
+                  >
                     {visitBadge}
                   </Text>
                 </div>
               )}
               {rating != null && (
-                <Text variant="caption" className="block text-warning">
+                <Text variant="caption" className="block text-[11px] text-warning">
                   {formatPlaceRatingStars(rating)}{" "}
                   <span className="text-muted">({rating})</span>
                 </Text>
               )}
               {recordMemo && (
-                <Text variant="muted" className="line-clamp-2 text-sm">
+                <Text variant="muted" className="line-clamp-2 text-[12px]">
                   {recordMemo}
                 </Text>
               )}

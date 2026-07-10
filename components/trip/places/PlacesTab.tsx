@@ -176,7 +176,7 @@ export default function PlacesTab() {
       <PlaceSearchBar value={searchQuery} onChange={setSearchQuery} />
 
       {isNearbyView && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+        <span className="inline-flex h-6 items-center gap-1 rounded-full bg-primary/10 px-2 text-[11px] font-medium leading-none text-primary">
           <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
           내 주변 검색 중
         </span>

@@ -36,7 +36,12 @@ function formatImportMessage(
   return `${addedCount}개 추가, ${skippedCount}개 중복 건너뜀`;
 }
 
-/** Google My Maps KML 파일 가져오기 — 여행 설정 영역 전용 */
+function isSupportedKmlFileName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith(".kml") || lower.endsWith(".kmz");
+}
+
+/** KML 파일 가져오기 — 여행 My Maps 설정 영역 */
 export default function KmlImportButton() {
   const { data, updateData } = useTripDetail();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,14 +83,14 @@ export default function KmlImportButton() {
 
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith(".kml") &&
-        !file.name.toLowerCase().endsWith(".kmz")) {
-      setMessage("KML(.kml) 또는 KMZ(.kmz) 파일만 선택할 수 있습니다.");
+    if (!isSupportedKmlFileName(file.name)) {
+      setMessage("KML 파일만 선택할 수 있습니다.");
       return;
     }
 
     try {
       const lowerName = file.name.toLowerCase();
+      // 내부적으로 .kmz 도 허용 (UI에는 KML만 표기)
       const kmlText = lowerName.endsWith(".kmz")
         ? extractKmlFromKmzBuffer(await file.arrayBuffer())
         : await file.text();
@@ -122,7 +127,7 @@ export default function KmlImportButton() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".kml,.kmz"
+        accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz"
         className="hidden"
         onChange={handleFileChange}
         aria-hidden
@@ -135,7 +140,7 @@ export default function KmlImportButton() {
         className="w-full"
       >
         <FileDown className="h-4 w-4 shrink-0" aria-hidden />
-        KML / KMZ 가져오기
+        KML 가져오기
       </Button>
 
       {message && (

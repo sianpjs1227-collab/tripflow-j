@@ -107,12 +107,12 @@ export default function HeroCarouselCard({
 
         <div className="relative flex h-full flex-col justify-between px-5 pb-5 pt-5 text-white sm:px-6 sm:pb-6 sm:pt-6">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-sm">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex h-6 items-center rounded-full bg-white/20 px-2 text-[11px] font-semibold leading-none backdrop-blur-sm">
                 {statusBadge}
               </span>
               {highlightLabel && (
-                <span className="rounded-full bg-white/15 px-3 py-1 text-sm font-bold backdrop-blur-sm">
+                <span className="inline-flex h-6 items-center rounded-full bg-white/15 px-2 text-[11px] font-semibold leading-none backdrop-blur-sm">
                   {highlightLabel}
                 </span>
               )}

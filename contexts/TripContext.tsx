@@ -33,6 +33,17 @@ interface TripContextValue {
   trips: Trip[];
   addTrip: (input: CreateTripInput) => Trip;
   updateTrip: (id: string, input: CreateTripInput) => void;
+  patchTripExchangeRate: (
+    id: string,
+    patch: {
+      exchangeRate: number | null;
+      exchangeRateMode?: Trip["exchangeRateMode"];
+      exchangeRateDate?: string | null;
+      exchangeRateUnit?: number | null;
+      exchangeRateProvider?: Trip["exchangeRateProvider"];
+      exchangeRateUpdatedAt?: string | null;
+    },
+  ) => void;
   setTripStatus: (id: string, status: TripStatus) => void;
   resetTripStatusAuto: (id: string) => void;
   deleteTrip: (id: string) => void;
@@ -194,6 +205,61 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     [syncTripToSupabase],
   );
 
+  const patchTripExchangeRate = useCallback(
+    (
+      id: string,
+      patch: {
+        exchangeRate: number | null;
+        exchangeRateMode?: Trip["exchangeRateMode"];
+        exchangeRateDate?: string | null;
+        exchangeRateUnit?: number | null;
+        exchangeRateProvider?: Trip["exchangeRateProvider"];
+        exchangeRateUpdatedAt?: string | null;
+      },
+    ) => {
+      setTrips((prev) => {
+        const next = prev.map((trip) => {
+          if (trip.id !== id) return trip;
+          const exchangeRate = patch.exchangeRate;
+          const exchangeRateDate =
+            exchangeRate == null
+              ? null
+              : (patch.exchangeRateDate ?? trip.exchangeRateDate ?? null);
+          return {
+            ...trip,
+            exchangeRate,
+            exchangeRateMode:
+              exchangeRate == null
+                ? null
+                : (patch.exchangeRateMode ?? trip.exchangeRateMode ?? null),
+            exchangeRateDate,
+            exchangeRateUnit:
+              exchangeRate == null
+                ? null
+                : (patch.exchangeRateUnit ?? trip.exchangeRateUnit ?? null),
+            exchangeRateProvider:
+              exchangeRate == null
+                ? null
+                : (patch.exchangeRateProvider ??
+                  trip.exchangeRateProvider ??
+                  null),
+            exchangeRateUpdatedAt:
+              exchangeRate == null
+                ? null
+                : (patch.exchangeRateUpdatedAt ??
+                  (exchangeRateDate
+                    ? `${exchangeRateDate}T00:00:00.000Z`
+                    : trip.exchangeRateUpdatedAt ?? null)),
+          };
+        });
+        const updated = next.find((trip) => trip.id === id);
+        if (updated) void syncTripToSupabase(updated, "update");
+        return next;
+      });
+    },
+    [syncTripToSupabase],
+  );
+
   const setTripStatus = useCallback(
     (id: string, status: TripStatus) => {
       setTrips((prev) => {
@@ -247,6 +313,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       trips,
       addTrip,
       updateTrip,
+      patchTripExchangeRate,
       setTripStatus,
       resetTripStatusAuto,
       deleteTrip,
@@ -256,6 +323,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       trips,
       addTrip,
       updateTrip,
+      patchTripExchangeRate,
       setTripStatus,
       resetTripStatusAuto,
       deleteTrip,

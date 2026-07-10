@@ -87,14 +87,25 @@ export function logSupabaseQueryResult(
   payload: unknown,
   error?: SupabaseErrorLike,
 ): void {
-  console.log(`[Supabase Query] ${label}`, payload);
+  console.log(`[Supabase Query] ${label}`);
+  console.log("payload:", payload);
 
   if (error) {
-    console.error(`[Supabase Query Error] ${label}`, {
-      message: error.message ?? null,
-      code: error.code ?? null,
-      details: error.details ?? null,
-      hint: error.hint ?? null,
-    });
+    // Next.js overlay는 console.error 첫 인자만 크게 보여주므로
+    // message/code/details/hint 를 한 문자열로도 남긴다.
+    console.error(
+      [
+        `[Supabase Query Error] ${label}`,
+        `message: ${error?.message ?? null}`,
+        `code: ${error?.code ?? null}`,
+        `details: ${error?.details ?? null}`,
+        `hint: ${error?.hint ?? null}`,
+      ].join("\n"),
+    );
+    console.error("message:", error?.message ?? null);
+    console.error("code:", error?.code ?? null);
+    console.error("details:", error?.details ?? null);
+    console.error("hint:", error?.hint ?? null);
+    console.dir(error, { depth: null });
   }
 }

@@ -132,29 +132,41 @@ export default function ExpenseModal({
 
           {hasRate && trip.exchangeRate != null && (
             <Card padding="sm" className="bg-primary/5">
-              <Text variant="caption">환율</Text>
-              <Text variant="body-medium" className="mt-1">
-                {formatExchangeRateLabel(trip.currency, trip.exchangeRate)}
-              </Text>
               {form.amount.trim() &&
-                !Number.isNaN(localAmount) &&
-                localAmount > 0 && (
-                  <div className="mt-3 border-t border-border pt-3">
-                    <Text variant="caption">원화 금액</Text>
-                    <Text
-                      variant="body-medium"
-                      className="mt-1 text-lg font-semibold text-primary"
-                    >
-                      {krwPreview ?? "-"}
+              !Number.isNaN(localAmount) &&
+              localAmount > 0 ? (
+                <div className="space-y-1">
+                  <Text
+                    variant="body-medium"
+                    className="text-base font-semibold"
+                  >
+                    {formatExpenseAmount(localAmount, trip.currency)}
+                  </Text>
+                  {krwPreview && (
+                    <Text variant="body" className="text-primary">
+                      ≈ {krwPreview}
                     </Text>
-                    {krwPreview && (
-                      <Text variant="caption" className="mt-1">
-                        {formatExpenseAmount(localAmount, trip.currency)} →{" "}
-                        {krwPreview}
-                      </Text>
+                  )}
+                  <Text variant="caption" className="mt-1 block">
+                    {formatExchangeRateLabel(
+                      trip.currency,
+                      trip.exchangeRate,
+                      trip.exchangeRateUnit,
                     )}
-                  </div>
-                )}
+                  </Text>
+                </div>
+              ) : (
+                <>
+                  <Text variant="caption">적용 환율</Text>
+                  <Text variant="body-medium" className="mt-1">
+                    {formatExchangeRateLabel(
+                      trip.currency,
+                      trip.exchangeRate,
+                      trip.exchangeRateUnit,
+                    )}
+                  </Text>
+                </>
+              )}
             </Card>
           )}
 

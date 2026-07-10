@@ -20,5 +20,4 @@ export interface KmlImportResult {
   addedCount: number;
   skippedCount: number;
   updatedCount?: number;
-  deletedCount?: number;
 }

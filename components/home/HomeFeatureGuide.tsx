@@ -7,7 +7,7 @@ const FEATURES = [
   { icon: "📍", label: "장소 저장" },
   { icon: "💰", label: "지출 관리" },
   { icon: "✅", label: "체크리스트" },
-  { icon: "🗺", label: "Google My Maps 연동" },
+  { icon: "🗺", label: "Google My Maps" },
 ] as const;
 
 /** TripFlow J 기능 안내 */

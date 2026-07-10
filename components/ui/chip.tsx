@@ -13,7 +13,7 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(
         ref={ref}
         type={type}
         className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-full px-3.5 py-2 text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+          "inline-flex h-8 shrink-0 items-center justify-center rounded-full px-2.5 text-[11px] font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
           active
             ? "bg-primary text-white shadow-sm"
             : "border border-border bg-card text-foreground hover:border-border/80 hover:bg-background",

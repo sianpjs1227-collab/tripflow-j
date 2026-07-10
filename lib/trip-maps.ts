@@ -32,24 +32,20 @@ export function buildMyMapsViewerUrl(mapId: string): string {
   return `https://www.google.com/maps/d/viewer?mid=${encodeURIComponent(mapId)}`;
 }
 
-/** My Maps KML 다운로드 URL */
-export function buildMyMapsKmlUrl(mapId: string): string {
-  return `https://www.google.com/maps/d/kml?mid=${encodeURIComponent(mapId)}`;
-}
-
 function parseStoredConnection(raw: string): MyMapsConnection | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
   if (trimmed.startsWith("{")) {
     try {
-      const parsed = JSON.parse(trimmed) as MyMapsConnection;
+      const parsed = JSON.parse(trimmed) as MyMapsConnection & {
+        lastSyncAt?: string;
+        lastSyncResult?: unknown;
+      };
       if (parsed.mapId?.trim()) {
         return {
           mapId: parsed.mapId.trim(),
           viewerUrl: parsed.viewerUrl || buildMyMapsViewerUrl(parsed.mapId),
-          lastSyncAt: parsed.lastSyncAt,
-          lastSyncResult: parsed.lastSyncResult,
         };
       }
     } catch {
@@ -88,24 +84,27 @@ export function saveMyMapsConnection(
   try {
     localStorage.setItem(
       getMyMapsStorageKey(tripId),
-      JSON.stringify(connection),
+      JSON.stringify({
+        mapId: connection.mapId,
+        viewerUrl: connection.viewerUrl,
+      }),
     );
   } catch {
     // 저장 실패 시 무시
   }
 }
 
-/** 공유 링크 저장 — mid 자동 추출 */
-export function saveMyMapsLink(tripId: string, url: string): MyMapsConnection | null {
+/** 공유 링크 저장 — mid 추출 */
+export function saveMyMapsLink(
+  tripId: string,
+  url: string,
+): MyMapsConnection | null {
   const mapId = extractMapIdFromUrl(url);
   if (!mapId) return null;
 
-  const existing = loadMyMapsConnection(tripId);
   const connection: MyMapsConnection = {
     mapId,
     viewerUrl: normalizeMapsUrl(url),
-    lastSyncAt: existing?.lastSyncAt,
-    lastSyncResult: existing?.lastSyncResult,
   };
 
   saveMyMapsConnection(tripId, connection);
@@ -130,22 +129,4 @@ export function deleteMyMapsLink(tripId: string): void {
   } catch {
     // 삭제 실패 시 무시
   }
-}
-
-/** 마지막 동기화 시각 표시 */
-export function formatLastSyncTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const now = new Date();
-  const hours = date.getHours().toString().padStart(2, "0");
-  const minutes = date.getMinutes().toString().padStart(2, "0");
-
-  if (date.toDateString() === now.toDateString()) {
-    return `오늘 ${hours}:${minutes}`;
-  }
-
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  return `${month}/${day} ${hours}:${minutes}`;
 }

@@ -36,30 +36,38 @@ export default function ChecklistCategorySection({
         className="flex w-full items-center justify-between py-2 text-left"
         aria-expanded={isOpen}
       >
-        <Text variant="body-medium" as="span" className="text-base font-semibold">
+        <Text
+          variant="body-medium"
+          as="span"
+          className="text-[13px] font-semibold"
+        >
           {category}{" "}
-          <Text variant="muted" as="span" className="text-sm font-normal">
+          <Text
+            variant="caption"
+            as="span"
+            className="text-[11px] font-normal"
+          >
             ({checkedCount}/{items.length})
           </Text>
         </Text>
         {isOpen ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
         ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
         )}
       </button>
 
       {isOpen && (
-        <ul className="mt-2 space-y-2" role="list">
+        <ul className="mt-1.5 space-y-1.5" role="list">
           {items.map((item) => (
             <li key={item.id}>
-              <Card padding="sm">
-                <div className="flex items-center gap-3">
+              <Card padding="none" className="px-2.5 py-2">
+                <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={item.checked}
                     onChange={() => onToggle(item.id)}
-                    className="h-5 w-5 shrink-0 rounded border-border accent-primary"
+                    className="h-4 w-4 shrink-0 rounded border-border accent-primary"
                     aria-label={`${item.text} 체크`}
                   />
 
@@ -67,7 +75,7 @@ export default function ChecklistCategorySection({
                     type="button"
                     onClick={() => onEdit(item)}
                     className={cn(
-                      "min-w-0 flex-1 text-left text-base",
+                      "min-w-0 flex-1 text-left text-[13px] font-medium leading-snug",
                       item.checked
                         ? "text-muted line-through"
                         : "text-foreground",
@@ -83,7 +91,7 @@ export default function ChecklistCategorySection({
                       if (!confirm("이 항목을 삭제할까요?")) return;
                       onDelete(item.id);
                     }}
-                    className="h-auto shrink-0 px-2 text-sm text-muted hover:text-danger"
+                    className="h-7 shrink-0 px-1.5 text-[11px] text-muted hover:text-danger"
                   >
                     삭제
                   </Button>

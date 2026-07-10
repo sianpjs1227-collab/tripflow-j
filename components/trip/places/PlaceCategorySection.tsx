@@ -37,21 +37,29 @@ export default function PlaceCategorySection({
         className="flex w-full items-center justify-between py-2 text-left"
         aria-expanded={isOpen}
       >
-        <Text variant="body-medium" as="span" className="text-base font-semibold">
+        <Text
+          variant="body-medium"
+          as="span"
+          className="text-[13px] font-semibold"
+        >
           {icon} {label}{" "}
-          <Text variant="muted" as="span" className="text-sm font-normal">
+          <Text
+            variant="caption"
+            as="span"
+            className="text-[11px] font-normal"
+          >
             ({places.length})
           </Text>
         </Text>
         {isOpen ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
         ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
         )}
       </button>
 
       {isOpen && (
-        <ul className="mt-2 space-y-2" role="list">
+        <ul className="mt-1.5 space-y-1.5" role="list">
           {places.map((place) => (
             <li key={place.id}>
               <PlaceListCard place={place} onOpen={onOpenPlace} />

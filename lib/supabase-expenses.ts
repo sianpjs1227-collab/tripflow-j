@@ -140,10 +140,23 @@ export async function insertSupabaseExpense(
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
 
-  const { data, error } = await client.from("expenses").insert(row).select();
+  const payload = row;
+  console.log("expense payload", payload);
+  console.log("expenses.insert payload:", payload);
 
-  logSupabaseQueryResult("expenses.insert", { row, data }, error);
-  if (error) throw error;
+  const { data, error } = await client.from("expenses").insert(payload).select();
+
+  logSupabaseQueryResult("expenses.insert", { row: payload, data }, error);
+  if (error) {
+    console.error("Expense Insert Error");
+    console.error("message:", error?.message);
+    console.error("code:", error?.code);
+    console.error("details:", error?.details);
+    console.error("hint:", error?.hint);
+    console.error("payload:", payload);
+    console.dir(error, { depth: null });
+    throw error;
+  }
 }
 
 export async function updateSupabaseExpense(

@@ -87,14 +87,14 @@ export default function TripCard({
         <div className="relative">
           <TripCover trip={trip} />
 
-          <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+          <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
             <span
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-sm ${tripStatusToneClass(statusBadge.tone)}`}
+              className={`inline-flex h-6 items-center rounded-full px-2 text-[11px] font-semibold leading-none backdrop-blur-sm ${tripStatusToneClass(statusBadge.tone)}`}
             >
               {statusBadge.label}
             </span>
             {showDepartingToday && (
-              <span className="rounded-full bg-warning/90 px-2.5 py-1 text-xs font-semibold text-white">
+              <span className="inline-flex h-6 items-center rounded-full bg-warning/90 px-2 text-[11px] font-semibold leading-none text-white">
                 오늘 출발
               </span>
             )}

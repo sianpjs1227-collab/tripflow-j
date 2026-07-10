@@ -6,8 +6,16 @@ import {
   resolveCountryCode,
   resolveCountryName,
 } from "@/data/countries";
-import type { Trip } from "@/types/trip";
-import { parseExchangeRateInput } from "@/lib/currency-utils";
+import type {
+  CreateTripInput,
+  ExchangeRateMode,
+  ExchangeRateProvider,
+  Trip,
+} from "@/types/trip";
+import {
+  getExchangeRateDisplayUnit,
+  parseExchangeRateInput,
+} from "@/lib/currency-utils";
 import {
   computeAutoTripStatus,
   resolveTripStatus,
@@ -49,6 +57,11 @@ type LegacyTrip = Trip & {
   exchangeRateToKrw?: number;
   statusIsManual?: boolean;
   coverImage?: string;
+  exchangeRateUpdatedAt?: string | null;
+  exchangeRateMode?: ExchangeRateMode | null;
+  exchangeRateDate?: string | null;
+  exchangeRateUnit?: number | null;
+  exchangeRateProvider?: ExchangeRateProvider | null;
 };
 
 function resolveTripCurrencyFields(
@@ -68,6 +81,25 @@ function resolveTripCurrencyFields(
     rawRate != null && !Number.isNaN(rawRate) && rawRate > 0 ? rawRate : null;
 
   return { currency, exchangeRate: rate };
+}
+
+function normalizeMode(
+  mode: ExchangeRateMode | null | undefined,
+): ExchangeRateMode | null {
+  if (mode === "startDate" || mode === "current" || mode === "manual") {
+    return mode;
+  }
+  return null;
+}
+
+function normalizeProvider(
+  provider: ExchangeRateProvider | null | undefined,
+  mode: ExchangeRateMode | null,
+): ExchangeRateProvider | null {
+  if (provider === "koreaexim" || provider === "manual") return provider;
+  if (mode === "manual") return "manual";
+  if (mode === "startDate" || mode === "current") return "koreaexim";
+  return null;
 }
 
 /** localStorage 에서 불러온 여행 데이터 정규화 */
@@ -98,6 +130,23 @@ export function normalizeTrip(raw: LegacyTrip): Trip {
     statusIsManual,
   );
 
+  const exchangeRateMode = normalizeMode(raw.exchangeRateMode);
+  const exchangeRateDate =
+    raw.exchangeRateDate?.trim() ||
+    (raw.exchangeRateUpdatedAt
+      ? raw.exchangeRateUpdatedAt.slice(0, 10)
+      : null);
+  const exchangeRateUnit =
+    raw.exchangeRateUnit != null && raw.exchangeRateUnit > 0
+      ? raw.exchangeRateUnit
+      : currency !== "KRW"
+        ? getExchangeRateDisplayUnit(currency)
+        : null;
+  const exchangeRateProvider = normalizeProvider(
+    raw.exchangeRateProvider,
+    exchangeRateMode,
+  );
+
   return {
     id: raw.id,
     name,
@@ -112,27 +161,44 @@ export function normalizeTrip(raw: LegacyTrip): Trip {
     statusIsManual,
     currency,
     exchangeRate,
+    exchangeRateMode,
+    exchangeRateDate,
+    exchangeRateUnit,
+    exchangeRateProvider,
+    exchangeRateUpdatedAt: raw.exchangeRateUpdatedAt ?? null,
     coverImage: raw.coverImage || undefined,
   };
 }
 
-function resolveTripFields(input: {
-  name: string;
-  countryCode: string;
-  city: string;
-  startDate: string;
-  endDate: string;
-  exchangeRate: string;
-  coverImage?: string;
-}) {
+function resolveTripFields(input: CreateTripInput) {
   const code = input.countryCode.trim().toUpperCase();
   const country = getCountryByCode(code);
   const city = input.city.trim();
   const name = input.name.trim() || city;
   const currency = getCurrencyCodeByCountryCode(code);
   const parsedRate = parseExchangeRateInput(input.exchangeRate);
-  const exchangeRate =
-    currency === "KRW" ? null : (parsedRate ?? null);
+  const exchangeRate = currency === "KRW" ? null : (parsedRate ?? null);
+  const mode =
+    currency === "KRW"
+      ? null
+      : normalizeMode(input.exchangeRateMode) ?? "startDate";
+  const unit =
+    currency === "KRW"
+      ? null
+      : input.exchangeRateUnit != null && input.exchangeRateUnit > 0
+        ? input.exchangeRateUnit
+        : getExchangeRateDisplayUnit(currency);
+  const provider =
+    currency === "KRW"
+      ? null
+      : normalizeProvider(input.exchangeRateProvider, mode) ??
+        (mode === "manual" ? "manual" : "koreaexim");
+  const exchangeRateDate =
+    currency === "KRW"
+      ? null
+      : input.exchangeRateDate?.trim() ||
+        input.exchangeRateUpdatedAt?.slice(0, 10) ||
+        null;
 
   return {
     name,
@@ -145,21 +211,23 @@ function resolveTripFields(input: {
     duration: calculateDuration(input.startDate, input.endDate),
     currency,
     exchangeRate,
+    exchangeRateMode: mode,
+    exchangeRateDate,
+    exchangeRateUnit: unit,
+    exchangeRateProvider: provider,
+    exchangeRateUpdatedAt:
+      currency === "KRW"
+        ? null
+        : exchangeRateDate
+          ? `${exchangeRateDate}T00:00:00.000Z`
+          : (input.exchangeRateUpdatedAt ?? null),
     coverImage: input.coverImage?.trim() || undefined,
   };
 }
 
 /** 새 여행 객체 생성 */
 export function createTrip(
-  input: {
-    name: string;
-    countryCode: string;
-    city: string;
-    startDate: string;
-    endDate: string;
-    exchangeRate: string;
-    coverImage?: string;
-  },
+  input: CreateTripInput,
   options?: { id?: string; useUuid?: boolean },
 ): Trip {
   const fields = resolveTripFields(input);
@@ -185,28 +253,35 @@ export function displayDateToIso(displayDate: string): string {
 }
 
 /** 기존 여행 수정 */
-export function updateTrip(
-  existing: Trip,
-  input: {
-    name: string;
-    countryCode: string;
-    city: string;
-    startDate: string;
-    endDate: string;
-    exchangeRate: string;
-    coverImage?: string;
-  },
-): Trip {
+export function updateTrip(existing: Trip, input: CreateTripInput): Trip {
   const fields = resolveTripFields(input);
   const parsedRate = parseExchangeRateInput(input.exchangeRate);
 
   let exchangeRate = fields.exchangeRate;
+  let exchangeRateDate = fields.exchangeRateDate ?? null;
+  let exchangeRateMode = fields.exchangeRateMode ?? null;
+  let exchangeRateUnit = fields.exchangeRateUnit ?? null;
+  let exchangeRateProvider = fields.exchangeRateProvider ?? null;
+  let exchangeRateUpdatedAt = fields.exchangeRateUpdatedAt ?? null;
+
   if (fields.currency === "KRW") {
     exchangeRate = null;
+    exchangeRateDate = null;
+    exchangeRateMode = null;
+    exchangeRateUnit = null;
+    exchangeRateProvider = null;
+    exchangeRateUpdatedAt = null;
   } else if (parsedRate != null) {
     exchangeRate = parsedRate;
   } else if (fields.countryCode === existing.countryCode) {
     exchangeRate = existing.exchangeRate;
+    exchangeRateDate = existing.exchangeRateDate ?? exchangeRateDate;
+    exchangeRateMode = existing.exchangeRateMode ?? exchangeRateMode;
+    exchangeRateUnit = existing.exchangeRateUnit ?? exchangeRateUnit;
+    exchangeRateProvider =
+      existing.exchangeRateProvider ?? exchangeRateProvider;
+    exchangeRateUpdatedAt =
+      existing.exchangeRateUpdatedAt ?? exchangeRateUpdatedAt;
   }
 
   const statusIsManual = existing.statusIsManual ?? false;
@@ -218,6 +293,11 @@ export function updateTrip(
     ...existing,
     ...fields,
     exchangeRate,
+    exchangeRateMode,
+    exchangeRateDate,
+    exchangeRateUnit,
+    exchangeRateProvider,
+    exchangeRateUpdatedAt,
     status,
     statusIsManual,
     coverImage:

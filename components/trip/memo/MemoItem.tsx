@@ -26,40 +26,46 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full items-start justify-between gap-3 px-2.5 py-2 text-left"
         aria-expanded={isOpen}
       >
         <div className="min-w-0 flex-1">
-          <Text variant="body-medium" as="h3" className="text-base font-semibold">
+          <Text
+            variant="body-medium"
+            as="h3"
+            className="text-[13px] font-semibold leading-snug"
+          >
             {note.title}
           </Text>
           {!isOpen && (
-            <Text variant="muted" className="mt-1 truncate">
+            <Text variant="muted" className="mt-0.5 truncate text-[12px]">
               {preview}
             </Text>
           )}
-          <Text variant="caption" className="mt-1">
+          <Text variant="caption" className="mt-0.5 text-[11px]">
             {formatNoteDate(note.updatedAt)}
           </Text>
         </div>
         {isOpen ? (
-          <ChevronUp className="h-4 w-4 shrink-0 pt-1 text-muted" aria-hidden />
+          <ChevronUp className="h-3.5 w-3.5 shrink-0 pt-0.5 text-muted" aria-hidden />
         ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 pt-1 text-muted" aria-hidden />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 pt-0.5 text-muted" aria-hidden />
         )}
       </button>
 
       {isOpen && (
-        <div className="border-t border-border px-4 py-3">
+        <div className="border-t border-border px-2.5 py-2">
           {note.content.trim() ? (
-            <Text variant="body" className="whitespace-pre-wrap">
+            <Text variant="body" className="whitespace-pre-wrap text-[13px]">
               {note.content}
             </Text>
           ) : (
-            <Text variant="muted">내용이 없습니다.</Text>
+            <Text variant="muted" className="text-[12px]">
+              내용이 없습니다.
+            </Text>
           )}
 
-          <div className="mt-4 flex gap-2">
+          <div className="mt-3 flex gap-2">
             <Button
               type="button"
               variant="secondary"

@@ -16,7 +16,7 @@ const variantStyles: Record<TextVariant, string> = {
   body: "text-sm text-foreground",
   "body-medium": "text-sm font-medium text-foreground",
   muted: "text-sm text-muted",
-  caption: "text-xs text-muted",
+  caption: "text-[11px] text-muted",
   label: "text-sm font-medium text-foreground",
 };
 

@@ -11,12 +11,30 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-환경 변수는 `.env.local`에 설정합니다.
+환경 변수는 `.env.local`에 설정합니다. 템플릿은 `.env.example`을 참고하세요.
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+
+# 환율 (한국수출입은행 Open API) — 서버 전용
+KOREAEXIM_API_KEY=...
 ```
+
+### 환율 API 키 설정 (한국수출입은행)
+
+1. [한국수출입은행 Open API](https://www.koreaexim.go.kr/ir/HPHKIR020M01?apino=2&viewtype=C) 또는 [공공데이터포털 — 환율 정보](https://www.data.go.kr/data/3068846/openapi.do)에서 **현재환율(AP01)** 인증키를 발급받습니다.
+2. 프로젝트 루트 `.env.local`에 추가합니다 (클라이언트에 노출되지 않도록 `NEXT_PUBLIC_` 접두사 금지).
+
+```bash
+KOREAEXIM_API_KEY=발급받은_인증키
+```
+
+3. 개발 서버를 재시작합니다 (`npm run dev`).
+4. 앱은 `/api/exchange-rate?currency=JPY` Route Handler에서만 수출입은행 API를 호출합니다.
+5. 환율 조회가 실패해도 여행 생성·저장은 그대로 진행됩니다. UI에는 「환율을 가져올 수 없습니다.」만 표시됩니다.
+
+참고: 비영업일·영업일 오전 11시 이전에는 당일 데이터가 비어 있을 수 있어, 서버가 최근 영업일 데이터를 자동으로 찾습니다. `JPY(100)` 등 단위 고시는 1단위당 KRW로 나눠 저장합니다. VND·TWD 등 AP01 미제공 통화는 직접 입력으로 안내합니다.
 
 ## Supabase Migration
 
@@ -73,6 +91,8 @@ supabase/migrations/<timestamp>_add_notes_index.sql
 | `20260314000008_trip_invite.sql` | 이메일 초대 RPC + owner insert policy |
 | `20260314000009_detail_rls_members.sql` | places 등 상세 RLS를 trip_members 기준으로 변경 |
 | `20260314000010_trip_invites.sql` | trip_invites + 링크 초대 preview/accept RPC |
+| `20260314000011_trip_exchange_rate.sql` | trips.currency / exchange_rate / exchange_rate_updated_at |
+| `20260314000012_trip_exchange_rate_mode.sql` | exchange_rate_mode / date / unit / provider |
 
 ### 4. DB Push (원격 적용)
 

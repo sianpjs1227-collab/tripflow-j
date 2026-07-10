@@ -129,30 +129,3 @@ export function updateKmlPlacemarksIntoPlaces(
   };
 }
 
-/**
- * My Maps 동기화 — KML 갱신 + KML에 없는 장소 삭제
- * MANUAL 장소·일정 연결은 유지
- */
-export function syncKmlPlacemarksIntoPlaces(
-  existingPlaces: Place[],
-  placemarks: KmlPlacemark[],
-): KmlImportResult {
-  const placemarkNames = new Set(placemarks.map((p) => p.name.trim()));
-  const updateResult = updateKmlPlacemarksIntoPlaces(existingPlaces, placemarks);
-
-  let deletedCount = 0;
-  const places = updateResult.places.filter((place) => {
-    if (!isKmlPlace(place)) return true;
-    if (placemarkNames.has(place.name.trim())) return true;
-    deletedCount += 1;
-    return false;
-  });
-
-  return {
-    places,
-    addedCount: updateResult.addedCount,
-    skippedCount: 0,
-    updatedCount: updateResult.updatedCount,
-    deletedCount,
-  };
-}
