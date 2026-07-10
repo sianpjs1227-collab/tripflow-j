@@ -19,6 +19,7 @@ import {
 import { Button, Card, Chip, Input, OverlayLayer, Text } from "@/components/ui";
 import CityAutocomplete from "./CityAutocomplete";
 import TripCoverPicker from "./TripCoverPicker";
+import TripDateRangePicker from "./TripDateRangePicker";
 
 interface CreateTripModalProps {
   isOpen: boolean;
@@ -233,31 +234,15 @@ export default function CreateTripModal({
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <Text variant="label" as="span">
-                시작일
-              </Text>
-              <Input
-                type="date"
-                value={form.startDate}
-                onChange={(e) => handleChange("startDate", e.target.value)}
-                className="mt-1"
-              />
-            </label>
-
-            <label className="block">
-              <Text variant="label" as="span">
-                종료일
-              </Text>
-              <Input
-                type="date"
-                value={form.endDate}
-                onChange={(e) => handleChange("endDate", e.target.value)}
-                className="mt-1"
-              />
-            </label>
-          </div>
+          <TripDateRangePicker
+            key={editingTrip?.id ?? `create-${isOpen}`}
+            startDate={form.startDate}
+            endDate={form.endDate}
+            onChange={({ startDate, endDate }) => {
+              setForm((prev) => ({ ...prev, startDate, endDate }));
+              setError("");
+            }}
+          />
 
           {currency && !isKrwTrip && (
             <label className="block">
