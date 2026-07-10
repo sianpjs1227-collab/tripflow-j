@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase";
+import { consumeAuthNextPath } from "@/lib/supabase-trip-invite-links";
 import { Text } from "@/components/ui";
 
 /** Google OAuth 리다이렉트 콜백 */
@@ -29,7 +30,12 @@ export default function AuthCallbackPage() {
         await client.auth.getSession();
       }
 
-      router.replace("/");
+      const nextPath = consumeAuthNextPath();
+      const safeNext =
+        nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
+          ? nextPath
+          : "/";
+      router.replace(safeNext);
     }
 
     void handleCallback();
