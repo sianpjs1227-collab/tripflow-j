@@ -13,12 +13,14 @@ import {
   normalizeTrip,
 } from "@/lib/trip-utils";
 import type { Trip } from "@/types/trip";
-import type { SupabaseTripRow } from "@/types/supabase-trip";
+import type {
+  SupabaseTripInsert,
+  SupabaseTripRow,
+  SupabaseTripUpdate,
+} from "@/types/supabase-trip";
 
-/** trips.insert / update 에 쓰는 기존 스키마 컬럼만 */
-type TripCoreInsert = {
-  id: string;
-  user_id: string;
+/** trips.insert / update 공통 — 기본 컬럼 */
+type TripCoreFields = {
   title: string;
   country: string;
   city: string;
@@ -28,24 +30,8 @@ type TripCoreInsert = {
   cover_image: string | null;
 };
 
-type TripCoreUpdate = {
-  title: string;
-  country: string;
-  city: string;
-  start_date: string;
-  end_date: string;
-  status: Trip["status"];
-  cover_image: string | null;
-  updated_at: string;
-};
-
-function tripToSupabaseCoreInsert(
-  trip: Trip,
-  userId: string,
-): TripCoreInsert {
+function tripToSupabaseCoreFields(trip: Trip): TripCoreFields {
   return {
-    id: trip.id,
-    user_id: userId,
     title: trip.name,
     country: trip.country,
     city: trip.city,
@@ -56,15 +42,64 @@ function tripToSupabaseCoreInsert(
   };
 }
 
-function tripToSupabaseCoreUpdate(trip: Trip): TripCoreUpdate {
+function tripToSupabaseExchangeFields(
+  trip: Trip,
+): Pick<
+  SupabaseTripInsert,
+  | "currency"
+  | "exchange_rate"
+  | "exchange_rate_mode"
+  | "exchange_rate_date"
+  | "exchange_rate_unit"
+  | "exchange_rate_provider"
+  | "exchange_rate_updated_at"
+> {
+  const currency = trip.currency?.trim().toUpperCase() || "KRW";
+
+  if (
+    currency === "KRW" ||
+    trip.exchangeRate == null ||
+    trip.exchangeRate <= 0
+  ) {
+    return {
+      currency,
+      exchange_rate: null,
+      exchange_rate_mode: null,
+      exchange_rate_date: null,
+      exchange_rate_unit: null,
+      exchange_rate_provider: null,
+      exchange_rate_updated_at: null,
+    };
+  }
+
+  const exchangeRateDate = trip.exchangeRateDate ?? null;
+
   return {
-    title: trip.name,
-    country: trip.country,
-    city: trip.city,
-    start_date: displayDateToIso(trip.startDate),
-    end_date: displayDateToIso(trip.endDate),
-    cover_image: trip.coverImage ?? null,
-    status: trip.status,
+    currency,
+    exchange_rate: trip.exchangeRate,
+    exchange_rate_mode: trip.exchangeRateMode ?? null,
+    exchange_rate_date: exchangeRateDate,
+    exchange_rate_unit: trip.exchangeRateUnit ?? null,
+    exchange_rate_provider: trip.exchangeRateProvider ?? null,
+    exchange_rate_updated_at:
+      trip.exchangeRateUpdatedAt ??
+      (exchangeRateDate ? `${exchangeRateDate}T00:00:00.000Z` : null),
+  };
+}
+
+function tripToSupabaseInsert(trip: Trip, userId: string): SupabaseTripInsert {
+  return {
+    id: trip.id,
+    user_id: userId,
+    ...tripToSupabaseCoreFields(trip),
+    ...tripToSupabaseExchangeFields(trip),
+  };
+}
+
+function tripToSupabaseUpdate(trip: Trip): SupabaseTripUpdate {
+  return {
+    ...tripToSupabaseCoreFields(trip),
+    ...tripToSupabaseExchangeFields(trip),
     updated_at: new Date().toISOString(),
   };
 }
@@ -208,7 +243,7 @@ export async function insertSupabaseTrip(
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
 
-  const payload = tripToSupabaseCoreInsert(trip, userId);
+  const payload = tripToSupabaseInsert(trip, userId);
   console.log("trip insert payload", payload);
 
   // 1) insert only — do NOT chain .select()
@@ -252,12 +287,12 @@ export async function insertSupabaseTrip(
   return trip;
 }
 
-/** 여행 수정 — 기존 컬럼만 (환율 DB 동기화 임시 비활성) */
+/** 여행 수정 — 환율·통화 포함 */
 export async function updateSupabaseTrip(trip: Trip): Promise<void> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
 
-  const payload = tripToSupabaseCoreUpdate(trip);
+  const payload = tripToSupabaseUpdate(trip);
   console.log("trip update payload", payload);
 
   const { error } = await client
@@ -296,9 +331,7 @@ export async function migrateLocalTripsToSupabase(
   if (!client) throw new Error("Supabase client unavailable");
 
   const migratedTrips = localTrips.map(assignUuidToTripForMigration);
-  const rows = migratedTrips.map((trip) =>
-    tripToSupabaseCoreInsert(trip, userId),
-  );
+  const rows = migratedTrips.map((trip) => tripToSupabaseInsert(trip, userId));
 
   console.log("trip insert payload", rows);
 

@@ -26,8 +26,27 @@ import {
 import { deleteTripDetailData } from "@/lib/trip-detail-storage";
 import { deleteMyMapsLink } from "@/lib/trip-maps";
 import type { CreateTripInput, Trip, TripStatus } from "@/types/trip";
+import { tripHasExchangeRate } from "@/lib/currency-utils";
 
 type TripStorageMode = "local" | "supabase";
+
+function mergeTripExchangeFromLocal(remote: Trip, local?: Trip): Trip {
+  if (!local || tripHasExchangeRate(remote)) return remote;
+  if (!tripHasExchangeRate(local)) return remote;
+
+  return {
+    ...remote,
+    currency: local.currency,
+    exchangeRate: local.exchangeRate,
+    exchangeRateMode: local.exchangeRateMode ?? remote.exchangeRateMode,
+    exchangeRateDate: local.exchangeRateDate ?? remote.exchangeRateDate,
+    exchangeRateUnit: local.exchangeRateUnit ?? remote.exchangeRateUnit,
+    exchangeRateProvider:
+      local.exchangeRateProvider ?? remote.exchangeRateProvider,
+    exchangeRateUpdatedAt:
+      local.exchangeRateUpdatedAt ?? remote.exchangeRateUpdatedAt,
+  };
+}
 
 interface TripContextValue {
   trips: Trip[];
@@ -145,9 +164,23 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       try {
         let remoteTrips = await fetchSupabaseTrips(user.id);
         const localTrips = loadTripsFromLocalStorage();
+        const localById = new Map(localTrips.map((trip) => [trip.id, trip]));
 
         if (remoteTrips.length === 0 && localTrips.length > 0) {
           remoteTrips = await migrateLocalTripsToSupabase(user.id, localTrips);
+        } else if (remoteTrips.length > 0) {
+          remoteTrips = remoteTrips.map((remote) => {
+            const merged = mergeTripExchangeFromLocal(
+              remote,
+              localById.get(remote.id),
+            );
+            const remoteHadRate = tripHasExchangeRate(remote);
+            const mergedHasRate = tripHasExchangeRate(merged);
+            if (!remoteHadRate && mergedHasRate) {
+              void updateSupabaseTrip(merged);
+            }
+            return merged;
+          });
         }
 
         if (!cancelled) {
@@ -175,9 +208,9 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
   }, [authLoading, authMode, user, fallbackToLocal]);
 
   useEffect(() => {
-    if (!hydrated || storageMode !== "local") return;
+    if (!hydrated) return;
     saveTripsToLocalStorage(trips);
-  }, [trips, hydrated, storageMode]);
+  }, [trips, hydrated]);
 
   const addTrip = useCallback(
     (input: CreateTripInput) => {
