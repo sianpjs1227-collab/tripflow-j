@@ -18,6 +18,7 @@ import HomeHeroCarousel from "./HomeHeroCarousel";
 import CreateTripButton from "./CreateTripButton";
 import HomeAlbumCard from "./HomeAlbumCard";
 import CreateTripModal from "@/components/trip/CreateTripModal";
+import PwaInstallButton from "@/components/pwa/PwaInstallButton";
 import { HOME_CARD_STACK_CLASS } from "./home-layout";
 
 /** TripFlow J 앱 홈 화면 */
@@ -68,6 +69,8 @@ export default function HomeScreen() {
 
   return (
     <div className="relative min-h-full bg-background">
+      <PwaInstallButton />
+
       <PageContainer
         constrained
         className="relative flex min-h-full flex-col gap-8 pb-20 pt-10 sm:mx-auto sm:pt-14"

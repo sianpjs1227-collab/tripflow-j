@@ -28,3 +28,21 @@ export function detectPwaPlatform(): PwaPlatform {
 export function supportsBeforeInstallPrompt(): boolean {
   return typeof window !== "undefined" && "BeforeInstallPromptEvent" in window;
 }
+
+type PwaInstallVisibilityInput = {
+  isInstalled: boolean;
+  platform: PwaPlatform;
+  hasDeferredPrompt: boolean;
+};
+
+/** 메인 화면 설치 버튼 표시 여부 */
+export function shouldShowPwaInstallButton({
+  isInstalled,
+  platform,
+  hasDeferredPrompt,
+}: PwaInstallVisibilityInput): boolean {
+  if (isInstalled) return false;
+  if (platform === "ios") return true;
+  if (platform === "android" && hasDeferredPrompt) return true;
+  return false;
+}
