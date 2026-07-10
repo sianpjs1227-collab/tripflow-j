@@ -228,9 +228,6 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
 
     const items = selectedDay.items;
     const scheduleCount = items.length;
-    const placeCount = new Set(
-      items.map((item) => item.placeId).filter(Boolean),
-    ).size;
     const dayExpenses = data.expenses.filter(
       (expense) => expense.date === selectedDay.date,
     );
@@ -240,26 +237,21 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
     );
     const currencyCode = tripHasExchangeRate(trip) ? trip.currency : "KRW";
     const expenseLabel = formatExpenseAmount(expenseTotal, currencyCode);
-    const favoriteCount = items.filter(
-      (item) => item.placeId && favoriteIds.has(item.placeId),
-    ).length;
 
     return {
       scheduleCount,
-      placeCount,
       expenseLabel,
-      favoriteCount,
     };
-  }, [selectedDay, data.expenses, trip, favoriteIds]);
+  }, [selectedDay, data.expenses, trip]);
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <Text variant="title-sm" as="h2">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <Text variant="title-sm" as="h2" className="text-base">
           일정
         </Text>
-        <Button type="button" onClick={openCreateModal} size="sm" className="shrink-0">
-          <Plus className="h-4 w-4" aria-hidden />
+        <Button type="button" onClick={openCreateModal} size="sm" className="h-8 shrink-0 px-2.5 text-[11px]">
+          <Plus className="h-3.5 w-3.5" aria-hidden />
           추가
         </Button>
       </div>
@@ -272,10 +264,10 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
         <>
           <div
             ref={dayChipsRef}
-            className="sticky-layer-day-chips -mx-4 border-b border-border bg-background/95 px-4 py-1.5 backdrop-blur-md sm:-mx-5 sm:px-5"
+            className="sticky-layer-day-chips -mx-4 border-b border-border bg-background/95 px-4 py-1 backdrop-blur-md sm:-mx-5 sm:px-5"
           >
             <div className="scrollbar-hide overflow-x-auto">
-              <div className="flex w-max gap-1.5">
+              <div className="flex w-max gap-1">
                 {dayTabs.map((day) => {
                   const isSelected = selectedDay?.date === day.date;
 
@@ -284,7 +276,7 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
                       key={day.date}
                       active={isSelected}
                       onClick={() => setSelectedDate(day.date)}
-                      className="min-w-[3.75rem] flex-col gap-0 px-2.5 py-1.5 transition-all duration-200"
+                      className="h-8 min-w-[3.5rem] flex-col gap-0 px-2 py-0 text-[11px] transition-all duration-200"
                     >
                       <span className="text-[11px] font-semibold leading-none">
                         DAY{day.dayNumber}
@@ -306,7 +298,7 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
 
           <div
             ref={subviewTabsRef}
-            className="sticky-layer-schedule-subview -mx-4 border-b border-border bg-background/95 px-4 py-2 backdrop-blur-md sm:-mx-5 sm:px-5"
+            className="sticky-layer-schedule-subview -mx-4 border-b border-border bg-background/95 px-4 py-1 backdrop-blur-md sm:-mx-5 sm:px-5"
           >
             <ScheduleDaySubviewTabs
               activeView={activeSubview}
@@ -315,12 +307,10 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
           </div>
 
           {selectedDay && daySummary && (
-            <div key={selectedDay.date} className="animate-slide-up space-y-3">
+            <div key={selectedDay.date} className="animate-slide-up space-y-2">
               <DaySummaryCard
                 scheduleCount={daySummary.scheduleCount}
-                placeCount={daySummary.placeCount}
                 expenseLabel={daySummary.expenseLabel}
-                favoriteCount={daySummary.favoriteCount}
               />
 
               <div

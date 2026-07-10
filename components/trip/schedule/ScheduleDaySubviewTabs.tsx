@@ -15,14 +15,14 @@ interface ScheduleDaySubviewTabsProps {
   onChange: (view: ScheduleDaySubview) => void;
 }
 
-/** DAY 하위 — 일정 / 경로 / 추천 탭 */
+/** DAY 하위 — 일정 / 경로 / 추천 (DAY·상단탭과 높이·폰트 통일) */
 export default function ScheduleDaySubviewTabs({
   activeView,
   onChange,
 }: ScheduleDaySubviewTabsProps) {
   return (
     <div
-      className="flex gap-1 rounded-2xl border border-border bg-background p-1"
+      className="flex gap-1 rounded-xl border border-border bg-background p-0.5"
       role="tablist"
       aria-label="일정 보기"
     >
@@ -37,7 +37,7 @@ export default function ScheduleDaySubviewTabs({
             aria-selected={isActive}
             onClick={() => onChange(view.id)}
             className={cn(
-              "flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 ease-out",
+              "flex h-8 flex-1 items-center justify-center rounded-lg px-2 text-[11px] font-medium transition-all duration-200 ease-out",
               isActive
                 ? "bg-card text-primary shadow-sm"
                 : "text-muted hover:text-foreground",

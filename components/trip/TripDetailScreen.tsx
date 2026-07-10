@@ -102,28 +102,28 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
       <PageContainer constrained className="pb-10">
         <div
           ref={headerRef}
-          className="sticky-layer-header -mx-4 bg-background/95 px-4 pb-1.5 backdrop-blur-md sm:-mx-5 sm:px-5"
+          className="sticky-layer-header -mx-4 bg-background/95 px-4 pb-1 backdrop-blur-md sm:-mx-5 sm:px-5"
         >
-          <div className="flex items-center justify-between gap-3 pt-2.5 pb-1.5">
+          <div className="flex items-center justify-between gap-2 pt-2 pb-1">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors hover:text-primary/80"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-primary transition-colors hover:text-primary/80"
             >
-              <ArrowLeft className="h-4 w-4" aria-hidden />
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
               홈으로
             </Link>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               {isOwner && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsInviteSheetOpen(true)}
-                  className="h-9 w-9 p-0 text-muted"
+                  className="h-8 w-8 p-0 text-muted"
                   aria-label="여행 공유"
                 >
-                  <Share2 className="h-4 w-4" aria-hidden />
+                  <Share2 className="h-3.5 w-3.5" aria-hidden />
                 </Button>
               )}
               <TripMoreMenu
@@ -150,8 +150,8 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
 
         <TripTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-        <main className="pt-2.5">
-          <div key={activeTab} className="animate-fade-in space-y-4">
+        <main className="pt-2">
+          <div key={activeTab} className="animate-fade-in space-y-3">
             <TripTabContent trip={currentTrip} activeTab={activeTab} />
           </div>
         </main>

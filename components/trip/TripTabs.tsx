@@ -24,18 +24,18 @@ interface TripTabsProps {
   onTabChange: (tab: TripTab) => void;
 }
 
-/** 여행 상세 페이지 탭 — Lucide 아이콘 + 텍스트 */
+/** 여행 상세 탭 — DAY/서브탭과 높이·폰트 통일 */
 export default function TripTabs({ activeTab, onTabChange }: TripTabsProps) {
   const tabsRef = useStickyLayer(STICKY_LAYER_VARS.tripTabs);
 
   return (
     <nav
       ref={tabsRef}
-      className="sticky-layer-trip-tabs -mx-1 mt-2 border-b border-border bg-background/95 py-1 backdrop-blur-md"
+      className="sticky-layer-trip-tabs -mx-1 mt-1.5 border-b border-border bg-background/95 py-0.5 backdrop-blur-md"
       aria-label="여행 상세 탭"
     >
       <div className="scrollbar-hide overflow-x-auto px-1">
-        <div className="flex w-max min-w-full gap-1.5">
+        <div className="flex w-max min-w-full gap-1">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const Icon = tab.icon;
@@ -46,7 +46,7 @@ export default function TripTabs({ activeTab, onTabChange }: TripTabsProps) {
                 type="button"
                 onClick={() => onTabChange(tab.id)}
                 className={cn(
-                  "flex shrink-0 flex-col items-center gap-0.5 rounded-xl border px-3 py-1.5 transition-all duration-200 ease-out sm:flex-1 sm:flex-row sm:justify-center sm:gap-1.5 sm:py-2",
+                  "flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2.5 transition-all duration-200 ease-out sm:flex-1 sm:justify-center",
                   isActive
                     ? "border-border bg-card text-primary shadow-sm"
                     : "border-transparent text-muted hover:border-border hover:bg-card hover:text-foreground",
@@ -55,12 +55,12 @@ export default function TripTabs({ activeTab, onTabChange }: TripTabsProps) {
               >
                 <Icon
                   className={cn(
-                    "h-[16px] w-[16px] shrink-0 transition-colors duration-200 sm:h-[18px] sm:w-[18px]",
+                    "h-3.5 w-3.5 shrink-0 transition-colors duration-200",
                     isActive ? "text-primary" : "text-muted",
                   )}
                   aria-hidden
                 />
-                <span className="whitespace-nowrap text-[11px] font-medium sm:text-sm">
+                <span className="whitespace-nowrap text-[11px] font-medium">
                   {tab.label}
                 </span>
               </button>
