@@ -93,6 +93,11 @@ export default function TripCard({
             >
               {statusBadge.label}
             </span>
+            {progress && statusBadge.tone === "traveling" && (
+              <span className="inline-flex h-6 items-center rounded-full bg-warning/90 px-2 text-[11px] font-semibold leading-none text-white backdrop-blur-sm">
+                DAY {progress.currentDay}
+              </span>
+            )}
             {showDepartingToday && (
               <span className="inline-flex h-6 items-center rounded-full bg-warning/90 px-2 text-[11px] font-semibold leading-none text-white">
                 오늘 출발

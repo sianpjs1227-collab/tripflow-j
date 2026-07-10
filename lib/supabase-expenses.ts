@@ -12,6 +12,37 @@ import type {
   SupabaseExpenseUpdate,
 } from "@/types/supabase-expense";
 
+/** next dev(Strict Mode)에서 동일 expense.id insert 중복 실행 방지 — production에서는 사용하지 않음 */
+const pendingExpenseInsertIds = new Set<string>();
+const completedExpenseInsertIds = new Set<string>();
+
+function isDevExpenseInsertDedupeEnabled(): boolean {
+  return process.env.NODE_ENV === "development";
+}
+
+function shouldSkipDevExpenseInsert(expenseId: string): boolean {
+  if (!isDevExpenseInsertDedupeEnabled()) return false;
+  return (
+    pendingExpenseInsertIds.has(expenseId) ||
+    completedExpenseInsertIds.has(expenseId)
+  );
+}
+
+function acquireDevExpenseInsert(expenseId: string): boolean {
+  if (!isDevExpenseInsertDedupeEnabled()) return true;
+  if (shouldSkipDevExpenseInsert(expenseId)) return false;
+  pendingExpenseInsertIds.add(expenseId);
+  return true;
+}
+
+function releaseDevExpenseInsert(expenseId: string, succeeded: boolean): void {
+  if (!isDevExpenseInsertDedupeEnabled()) return;
+  pendingExpenseInsertIds.delete(expenseId);
+  if (succeeded) {
+    completedExpenseInsertIds.add(expenseId);
+  }
+}
+
 function resolveItineraryId(
   expense: Expense,
   validItineraryIds: ReadonlySet<string>,
@@ -137,24 +168,34 @@ export async function fetchSupabaseExpensesByTripId(
 export async function insertSupabaseExpense(
   row: SupabaseExpenseInsert,
 ): Promise<void> {
+  if (shouldSkipDevExpenseInsert(row.id)) {
+    console.log("[Supabase Query] expenses.insert.skip_pending", {
+      expenseId: row.id,
+    });
+    return;
+  }
+
+  if (!acquireDevExpenseInsert(row.id)) {
+    console.log("[Supabase Query] expenses.insert.skip_pending", {
+      expenseId: row.id,
+    });
+    return;
+  }
+
   const client = getSupabaseClient();
-  if (!client) throw new Error("Supabase client unavailable");
+  if (!client) {
+    releaseDevExpenseInsert(row.id, false);
+    throw new Error("Supabase client unavailable");
+  }
 
-  const payload = row;
-  console.log("expense payload", payload);
-  console.log("expenses.insert payload:", payload);
+  try {
+    const { data, error } = await client.from("expenses").insert(row).select();
 
-  const { data, error } = await client.from("expenses").insert(payload).select();
-
-  logSupabaseQueryResult("expenses.insert", { row: payload, data }, error);
-  if (error) {
-    console.error("Expense Insert Error");
-    console.error("message:", error?.message);
-    console.error("code:", error?.code);
-    console.error("details:", error?.details);
-    console.error("hint:", error?.hint);
-    console.error("payload:", payload);
-    console.dir(error, { depth: null });
+    logSupabaseQueryResult("expenses.insert", { row, data }, error);
+    if (error) throw error;
+    releaseDevExpenseInsert(row.id, true);
+  } catch (error) {
+    releaseDevExpenseInsert(row.id, false);
     throw error;
   }
 }
@@ -180,6 +221,10 @@ export async function deleteSupabaseExpense(expenseId: string): Promise<void> {
 
   logSupabaseQueryResult("expenses.delete", { expenseId }, error);
   if (error) throw error;
+
+  if (isDevExpenseInsertDedupeEnabled()) {
+    completedExpenseInsertIds.delete(expenseId);
+  }
 }
 
 export async function syncSupabaseExpensesDiff(
@@ -235,10 +280,51 @@ export async function migrateLocalExpensesToSupabase(
     expenseToSupabaseInsert(expense, tripId, validItineraryIds),
   );
 
-  const { data, error } = await client.from("expenses").insert(rows).select();
+  const rowsToInsert = rows.filter((row) => {
+    if (!shouldSkipDevExpenseInsert(row.id)) return true;
+    console.log("[Supabase Query] expenses.migrate.skip_pending", {
+      expenseId: row.id,
+    });
+    return false;
+  });
 
-  logSupabaseQueryResult("expenses.migrate", { tripId, rows, data }, error);
-  if (error) throw error;
+  const acquiredRows: SupabaseExpenseInsert[] = [];
+  for (const row of rowsToInsert) {
+    if (acquireDevExpenseInsert(row.id)) {
+      acquiredRows.push(row);
+      continue;
+    }
+    console.log("[Supabase Query] expenses.migrate.skip_pending", {
+      expenseId: row.id,
+    });
+  }
+
+  if (acquiredRows.length === 0) {
+    return migratedExpenses;
+  }
+
+  try {
+    const { data, error } = await client
+      .from("expenses")
+      .insert(acquiredRows)
+      .select();
+
+    logSupabaseQueryResult(
+      "expenses.migrate",
+      { tripId, rows: acquiredRows, data },
+      error,
+    );
+    if (error) throw error;
+
+    for (const row of acquiredRows) {
+      releaseDevExpenseInsert(row.id, true);
+    }
+  } catch (error) {
+    for (const row of acquiredRows) {
+      releaseDevExpenseInsert(row.id, false);
+    }
+    throw error;
+  }
 
   return migratedExpenses;
 }

@@ -91,7 +91,7 @@ export default function ChecklistCategorySection({
                       if (!confirm("이 항목을 삭제할까요?")) return;
                       onDelete(item.id);
                     }}
-                    className="h-7 shrink-0 px-1.5 text-[11px] text-muted hover:text-danger"
+                    className="h-8 shrink-0 px-2 text-[11px] text-muted hover:text-danger"
                   >
                     삭제
                   </Button>

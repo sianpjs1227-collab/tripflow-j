@@ -60,17 +60,22 @@ export function getExpenseTitle(expense: Expense): string {
   return `${icon} ${expenseCategoryLabels[expense.category]}`;
 }
 
-/** 저장된·계산된 원화 금액 */
+/** 저장된·계산된 원화 금액 — 여행 환율이 있으면 항상 현재 환율로 계산 */
 export function getExpenseKrwAmount(expense: Expense, trip: Trip): number {
-  if (expense.krwAmount != null && !Number.isNaN(expense.krwAmount)) {
-    return expense.krwAmount;
-  }
-
   if (tripHasExchangeRate(trip)) {
     return convertToKrw(expense.amount, trip.exchangeRate!);
   }
 
+  if (expense.krwAmount != null && !Number.isNaN(expense.krwAmount)) {
+    return expense.krwAmount;
+  }
+
   return expense.amount;
+}
+
+/** 오늘 날짜 (YYYY-MM-DD) */
+export function getTodayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 /** 지출 생성 — Trip 환율 기준으로 krwAmount 함께 저장 */
@@ -103,6 +108,20 @@ export function createExpenseFromInput(
   return {
     ...baseExpense,
     krwAmount: amount,
+  };
+}
+
+/** 지출 수정 — 기존 id·일정 참조 유지 */
+export function updateExpenseFromInput(
+  expense: Expense,
+  input: ExpenseInput,
+  trip: Trip,
+): Expense {
+  const updated = createExpenseFromInput(input, trip);
+  return {
+    ...updated,
+    id: expense.id,
+    itineraryId: expense.itineraryId,
   };
 }
 

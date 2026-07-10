@@ -1,22 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Trip } from "@/types/trip";
-import type { ExpenseCategory, ExpenseInput } from "@/types/expense";
+import type { Expense, ExpenseCategory, ExpenseInput } from "@/types/expense";
 import {
   convertToKrw,
   formatExchangeRateLabel,
   formatKrwAmount,
   tripHasExchangeRate,
 } from "@/lib/currency-utils";
-import { formatExpenseAmount } from "@/lib/expense-utils";
+import {
+  formatExpenseAmount,
+  getTodayIsoDate,
+} from "@/lib/expense-utils";
 import { Button, Card, Input, OverlayLayer, Text } from "@/components/ui";
 
 interface ExpenseModalProps {
   trip: Trip;
   isOpen: boolean;
+  editingExpense?: Expense | null;
   onClose: () => void;
   onSave: (input: ExpenseInput) => void;
+  onUpdate?: (id: string, input: ExpenseInput) => void;
+  onDelete?: (id: string) => void;
 }
 
 const EMPTY_FORM: ExpenseInput = {
@@ -29,17 +35,40 @@ const EMPTY_FORM: ExpenseInput = {
 const selectClassName =
   "mt-1 h-10 w-full rounded-xl border border-border bg-card px-3.5 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
 
+function expenseToForm(expense: Expense): ExpenseInput {
+  return {
+    date: expense.date,
+    amount: String(expense.amount),
+    category: expense.category,
+    memo: expense.memo ?? expense.title ?? "",
+  };
+}
+
 /**
- * 지출 추가 모달
+ * 지출 추가·수정 모달
  */
 export default function ExpenseModal({
   trip,
   isOpen,
+  editingExpense = null,
   onClose,
   onSave,
+  onUpdate,
+  onDelete,
 }: ExpenseModalProps) {
   const [form, setForm] = useState<ExpenseInput>(EMPTY_FORM);
   const [error, setError] = useState("");
+  const isEditing = editingExpense != null;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setForm(
+      editingExpense
+        ? expenseToForm(editingExpense)
+        : { ...EMPTY_FORM, date: getTodayIsoDate() },
+    );
+    setError("");
+  }, [isOpen, editingExpense]);
 
   const hasRate = tripHasExchangeRate(trip);
   const localAmount = Number(form.amount);
@@ -79,16 +108,25 @@ export default function ExpenseModal({
       return;
     }
 
-    onSave(form);
-    setForm(EMPTY_FORM);
+    if (isEditing && editingExpense && onUpdate) {
+      onUpdate(editingExpense.id, form);
+    } else {
+      onSave(form);
+    }
     setError("");
     onClose();
   };
 
   const handleClose = () => {
-    setForm(EMPTY_FORM);
     setError("");
     onClose();
+  };
+
+  const handleDelete = () => {
+    if (!editingExpense || !onDelete) return;
+    if (!confirm("이 지출을 삭제할까요?")) return;
+    onDelete(editingExpense.id);
+    handleClose();
   };
 
   return (
@@ -98,131 +136,143 @@ export default function ExpenseModal({
       onClose={handleClose}
       closeLabel="모달 닫기"
     >
-        <Text variant="title-sm" as="h2" className="text-xl font-bold">
-          지출 추가
-        </Text>
+      <Text variant="title-sm" as="h2" className="text-xl font-bold">
+        {isEditing ? "지출 수정" : "지출 추가"}
+      </Text>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <label className="block">
-            <Text variant="label" as="span">
-              날짜
-            </Text>
-            <Input
-              type="date"
-              value={form.date}
-              onChange={(e) => handleChange("date", e.target.value)}
-              className="mt-1"
-            />
-          </label>
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <label className="block">
+          <Text variant="label" as="span">
+            날짜
+          </Text>
+          <Input
+            type="date"
+            value={form.date}
+            onChange={(e) => handleChange("date", e.target.value)}
+            className="mt-1"
+          />
+        </label>
 
-          <label className="block">
-            <Text variant="label" as="span">
-              {hasRate ? `현지 금액 (${trip.currency})` : "금액 (KRW)"}
-            </Text>
-            <Input
-              type="number"
-              min="1"
-              step="any"
-              value={form.amount}
-              onChange={(e) => handleChange("amount", e.target.value)}
-              placeholder={hasRate ? "예: 1280" : "예: 15000"}
-              className="mt-1"
-            />
-          </label>
+        <label className="block">
+          <Text variant="label" as="span">
+            {hasRate ? `현지 금액 (${trip.currency})` : "금액 (KRW)"}
+          </Text>
+          <Input
+            type="number"
+            min="1"
+            step="any"
+            value={form.amount}
+            onChange={(e) => handleChange("amount", e.target.value)}
+            placeholder={hasRate ? "예: 1280" : "예: 15000"}
+            className="mt-1"
+          />
+        </label>
 
-          {hasRate && trip.exchangeRate != null && (
-            <Card padding="sm" className="bg-primary/5">
-              {form.amount.trim() &&
-              !Number.isNaN(localAmount) &&
-              localAmount > 0 ? (
-                <div className="space-y-1">
-                  <Text
-                    variant="body-medium"
-                    className="text-base font-semibold"
-                  >
-                    {formatExpenseAmount(localAmount, trip.currency)}
+        {hasRate && trip.exchangeRate != null && (
+          <Card padding="sm" className="bg-primary/5">
+            {form.amount.trim() &&
+            !Number.isNaN(localAmount) &&
+            localAmount > 0 ? (
+              <div className="space-y-1">
+                <Text
+                  variant="body-medium"
+                  className="text-base font-semibold"
+                >
+                  {formatExpenseAmount(localAmount, trip.currency)}
+                </Text>
+                {krwPreview && (
+                  <Text variant="body" className="text-primary">
+                    ≈ {krwPreview}
                   </Text>
-                  {krwPreview && (
-                    <Text variant="body" className="text-primary">
-                      ≈ {krwPreview}
-                    </Text>
+                )}
+                <Text variant="caption" className="mt-1 block">
+                  {formatExchangeRateLabel(
+                    trip.currency,
+                    trip.exchangeRate,
+                    trip.exchangeRateUnit,
                   )}
-                  <Text variant="caption" className="mt-1 block">
-                    {formatExchangeRateLabel(
-                      trip.currency,
-                      trip.exchangeRate,
-                      trip.exchangeRateUnit,
-                    )}
-                  </Text>
-                </div>
-              ) : (
-                <>
-                  <Text variant="caption">적용 환율</Text>
-                  <Text variant="body-medium" className="mt-1">
-                    {formatExchangeRateLabel(
-                      trip.currency,
-                      trip.exchangeRate,
-                      trip.exchangeRateUnit,
-                    )}
-                  </Text>
-                </>
-              )}
-            </Card>
-          )}
+                </Text>
+              </div>
+            ) : (
+              <>
+                <Text variant="caption">적용 환율</Text>
+                <Text variant="body-medium" className="mt-1">
+                  {formatExchangeRateLabel(
+                    trip.currency,
+                    trip.exchangeRate,
+                    trip.exchangeRateUnit,
+                  )}
+                </Text>
+              </>
+            )}
+          </Card>
+        )}
 
-          <label className="block">
-            <Text variant="label" as="span">
-              이름 / 메모{" "}
-              <Text variant="muted" as="span">(선택)</Text>
+        <label className="block">
+          <Text variant="label" as="span">
+            이름 / 메모{" "}
+            <Text variant="muted" as="span">
+              (선택)
             </Text>
-            <Input
-              type="text"
-              value={form.memo}
-              onChange={(e) => handleChange("memo", e.target.value)}
-              placeholder="예: 이치란, 스타벅스"
-              className="mt-1"
-            />
-          </label>
+          </Text>
+          <Input
+            type="text"
+            value={form.memo}
+            onChange={(e) => handleChange("memo", e.target.value)}
+            placeholder="예: 이치란, 스타벅스"
+            className="mt-1"
+          />
+        </label>
 
-          <label className="block">
-            <Text variant="label" as="span">
-              분류
-            </Text>
-            <select
-              value={form.category}
-              onChange={(e) =>
-                handleChange("category", e.target.value as ExpenseCategory)
-              }
-              className={selectClassName}
-            >
-              <option value="transport">교통</option>
-              <option value="food">식비</option>
-              <option value="cafe">카페</option>
-              <option value="shopping">쇼핑</option>
-              <option value="other">기타</option>
-            </select>
-          </label>
+        <label className="block">
+          <Text variant="label" as="span">
+            분류
+          </Text>
+          <select
+            value={form.category}
+            onChange={(e) =>
+              handleChange("category", e.target.value as ExpenseCategory)
+            }
+            className={selectClassName}
+          >
+            <option value="transport">교통</option>
+            <option value="food">식비</option>
+            <option value="cafe">카페</option>
+            <option value="shopping">쇼핑</option>
+            <option value="other">기타</option>
+          </select>
+        </label>
 
-          {error && (
-            <Text variant="body" className="text-danger" role="alert">
-              {error}
-            </Text>
-          )}
+        {error && (
+          <Text variant="body" className="text-danger" role="alert">
+            {error}
+          </Text>
+        )}
 
-          <div className="flex gap-3 pt-2">
+        <div className="flex gap-3 pt-2">
+          {isEditing && onDelete && (
             <Button
               type="button"
               variant="secondary"
-              onClick={handleClose}
-              className="flex-1"
+              onClick={handleDelete}
+              className="border-danger/30 text-danger"
             >
-              취소
+              삭제
             </Button>
-            <Button type="submit" className="flex-1">
-              저장
-            </Button>
-          </div>
-        </form>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleClose}
+            className="flex-1"
+          >
+            취소
+          </Button>
+          <Button type="submit" className="flex-1">
+            저장
+          </Button>
+        </div>
+      </form>
     </OverlayLayer>
   );
 }

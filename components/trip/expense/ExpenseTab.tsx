@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ExchangeRateMode, Trip } from "@/types/trip";
 import {
+  convertToKrw,
   displayAmountToRatePerOne,
   formatExchangeRateDateLabel,
   formatExchangeRateLabel,
@@ -14,7 +15,7 @@ import {
 import { fetchExchangeRateToKrw } from "@/lib/exchange-rate-api";
 import { useTripDetail } from "@/contexts/TripDetailContext";
 import { useTrips } from "@/contexts/TripContext";
-import type { ExpenseInput } from "@/types/expense";
+import type { Expense, ExpenseInput } from "@/types/expense";
 import {
   createExpenseFromInput,
   getExpenseCategoryTotals,
@@ -22,6 +23,7 @@ import {
   formatExpenseDate,
   formatExpenseDisplay,
   formatExpenseTotalDisplay,
+  updateExpenseFromInput,
 } from "@/lib/expense-utils";
 import { displayDateToIso } from "@/lib/trip-utils";
 import { Button, Card, OverlayLayer, Text } from "@/components/ui";
@@ -45,14 +47,54 @@ type RatePatch = {
 
 function ExpenseTabContent({ trip }: ExpenseTabProps) {
   const { data, updateData } = useTripDetail();
-  const { getTripById, patchTripExchangeRate } = useTrips();
+  const { trips, getTripById, patchTripExchangeRate } = useTrips();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRateEditorOpen, setIsRateEditorOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
-  const currentTrip = getTripById(trip.id) ?? trip;
+  const currentTrip = useMemo(
+    () => getTripById(trip.id) ?? trip,
+    [getTripById, trip, trips],
+  );
   const expenses = data.expenses;
   const hasRate = tripHasExchangeRate(currentTrip);
   const isForeign = currentTrip.currency !== "KRW";
+
+  const exchangeRateSignature = [
+    currentTrip.currency,
+    currentTrip.exchangeRate,
+    currentTrip.exchangeRateMode,
+    currentTrip.exchangeRateDate,
+    currentTrip.exchangeRateUnit,
+  ].join("|");
+
+  useEffect(() => {
+    if (!tripHasExchangeRate(currentTrip) || currentTrip.exchangeRate == null) {
+      return;
+    }
+
+    const rate = currentTrip.exchangeRate;
+    updateData((prev) => {
+      let changed = false;
+      const nextExpenses = prev.expenses.map((expense) => {
+        const krwAmount = convertToKrw(expense.amount, rate);
+        if (
+          expense.krwAmount === krwAmount &&
+          expense.currency === currentTrip.currency
+        ) {
+          return expense;
+        }
+        changed = true;
+        return {
+          ...expense,
+          currency: currentTrip.currency,
+          krwAmount,
+        };
+      });
+      if (!changed) return prev;
+      return { ...prev, expenses: nextExpenses };
+    });
+  }, [exchangeRateSignature, currentTrip.currency, currentTrip.exchangeRate, updateData]);
 
   const sortedExpenses = [...expenses].sort((a, b) =>
     b.date.localeCompare(a.date),
@@ -91,12 +133,43 @@ function ExpenseTabContent({ trip }: ExpenseTabProps) {
     }));
   };
 
+  const handleUpdate = (id: string, input: ExpenseInput) => {
+    updateData((prev) => ({
+      ...prev,
+      expenses: prev.expenses.map((item) =>
+        item.id === id ? updateExpenseFromInput(item, input, currentTrip) : item,
+      ),
+    }));
+  };
+
+  const handleDelete = (id: string) => {
+    updateData((prev) => ({
+      ...prev,
+      expenses: prev.expenses.filter((item) => item.id !== id),
+    }));
+  };
+
+  const openAddModal = () => {
+    setEditingExpense(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (expense: Expense) => {
+    setEditingExpense(expense);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingExpense(null);
+  };
+
   return (
     <div className="space-y-2">
       <TripTabHeader
         title="지출"
         meta={totalDisplay.primary}
-        onAdd={() => setIsModalOpen(true)}
+        onAdd={openAddModal}
       />
 
       {totalDisplay.secondary && (
@@ -191,7 +264,12 @@ function ExpenseTabContent({ trip }: ExpenseTabProps) {
             const display = formatExpenseDisplay(item, currentTrip);
             return (
               <li key={item.id}>
-                <Card padding="none" className="px-2.5 py-2">
+                <button
+                  type="button"
+                  onClick={() => openEditModal(item)}
+                  className="block w-full text-left"
+                >
+                  <Card padding="none" className="px-2.5 py-2 transition-colors hover:bg-background/80">
                   <Text
                     variant="body-medium"
                     className="text-[13px] font-semibold"
@@ -210,7 +288,8 @@ function ExpenseTabContent({ trip }: ExpenseTabProps) {
                     {formatExpenseDate(item.date)} ·{" "}
                     {expenseCategoryLabels[item.category]}
                   </Text>
-                </Card>
+                  </Card>
+                </button>
               </li>
             );
           })}
@@ -220,8 +299,11 @@ function ExpenseTabContent({ trip }: ExpenseTabProps) {
       <ExpenseModal
         trip={currentTrip}
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        editingExpense={editingExpense}
+        onClose={closeModal}
         onSave={handleSave}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
       />
 
       <ExchangeRateEditSheet
