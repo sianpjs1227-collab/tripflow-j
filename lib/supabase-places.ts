@@ -4,7 +4,11 @@ import {
   normalizePlaceCategory,
 } from "@/lib/place-utils";
 import { isPlaceVisited } from "@/lib/place-visit";
-import { getSupabaseClient, logSupabaseQueryResult } from "@/lib/supabase";
+import {
+  getSupabaseClient,
+  isUuid,
+  logSupabaseQueryResult,
+} from "@/lib/supabase";
 import type { Place } from "@/types/place";
 import type {
   SupabasePlaceInsert,
@@ -64,6 +68,27 @@ function supabaseFieldsEqual(a: Place, b: Place): boolean {
     visitedA === visitedB &&
     (a.visit?.visitedAt ?? null) === (b.visit?.visitedAt ?? null)
   );
+}
+
+function logUuidDiagnostics(
+  tripId: string,
+  rows: SupabasePlaceInsert[],
+): void {
+  const invalidPlaceIds = rows
+    .filter((row) => !isUuid(row.id))
+    .map((row) => row.id);
+  const invalidTripIds = rows
+    .filter((row) => !isUuid(row.trip_id))
+    .map((row) => row.trip_id);
+
+  console.log("[Supabase Query] places.migrate.uuid_check", {
+    tripId,
+    tripIdIsUuid: isUuid(tripId),
+    rowCount: rows.length,
+    invalidPlaceIds,
+    invalidTripIds,
+    note: "places table has no user_id column; membership is via trips/trip_members",
+  });
 }
 
 /** Supabase 행 → 앱 Place */
@@ -185,24 +210,94 @@ export async function syncSupabasePlacesDiff(
 
 /**
  * LocalStorage → Supabase 일괄 이전
- * legacy place id 를 uuid 로 변환한다.
+ * - local 비어 있으면 skip
+ * - 원격에 이미 places 있으면 skip
+ * - 이미 존재하는 id 는 insert 에서 제외
  */
 export async function migrateLocalPlacesToSupabase(
   tripId: string,
   localPlaces: Place[],
 ): Promise<{ places: Place[]; idMap: Record<string, string> }> {
-  if (localPlaces.length === 0) return { places: [], idMap: {} };
+  if (localPlaces.length === 0) {
+    console.log("[Supabase Query] places.migrate.skip", {
+      tripId,
+      reason: "localStorage places empty",
+    });
+    return { places: [], idMap: {} };
+  }
+
+  if (!isUuid(tripId)) {
+    console.error("[Supabase Query Error] places.migrate", {
+      message: "trip_id is not a valid UUID",
+      code: "INVALID_TRIP_ID",
+      details: `trip_id=${tripId}`,
+    });
+    throw new Error(`places.migrate: invalid trip_id (not UUID): ${tripId}`);
+  }
 
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
 
+  const existingRemote = await fetchSupabasePlacesByTripId(tripId);
+  if (existingRemote.length > 0) {
+    console.log("[Supabase Query] places.migrate.skip", {
+      tripId,
+      reason: "remote places already exist",
+      remoteCount: existingRemote.length,
+    });
+    return { places: existingRemote, idMap: {} };
+  }
+
   const { places, idMap } = preparePlacesForSupabaseMigration(localPlaces);
-  const rows = places.map((place) => placeToSupabaseInsert(place, tripId));
+  const existingIds = new Set(existingRemote.map((place) => place.id));
+  const rows = places
+    .map((place) => placeToSupabaseInsert(place, tripId))
+    .filter((row) => !existingIds.has(row.id));
+
+  console.log("[Supabase Query] places.migrate.payload", {
+    tripId,
+    localCount: localPlaces.length,
+    preparedCount: places.length,
+    insertCount: rows.length,
+    rows,
+  });
+  logUuidDiagnostics(tripId, rows);
+
+  if (rows.length === 0) {
+    console.log("[Supabase Query] places.migrate.skip", {
+      tripId,
+      reason: "no new place rows to insert",
+    });
+    return { places: existingRemote, idMap: {} };
+  }
+
+  const invalidIds = rows.filter((row) => !isUuid(row.id));
+  if (invalidIds.length > 0) {
+    console.error("[Supabase Query Error] places.migrate", {
+      message: "place id is not a valid UUID",
+      code: "INVALID_PLACE_ID",
+      details: invalidIds.map((row) => row.id).join(", "),
+    });
+    throw new Error("places.migrate: one or more place ids are not UUID");
+  }
 
   const { data, error } = await client.from("places").insert(rows).select();
 
-  logSupabaseQueryResult("places.migrate", { tripId, rows, data }, error);
-  if (error) throw error;
+  console.log("[Supabase Query] places.migrate", { tripId, rows, data });
+  if (error) {
+    console.error("[Supabase Query Error] places.migrate", {
+      message: error.message ?? null,
+      code: error.code ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+    });
+    throw error;
+  }
 
-  return { places, idMap };
+  logSupabaseQueryResult("places.migrate", { tripId, rows, data }, error);
+
+  return {
+    places: (data as SupabasePlaceRow[] | null)?.map(supabaseRowToPlace) ?? places,
+    idMap,
+  };
 }

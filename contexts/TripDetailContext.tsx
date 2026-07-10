@@ -207,13 +207,32 @@ export function TripDetailProvider({
         const localPlaces = localData.places;
         let detailData = localData;
 
-        if (remotePlaces.length === 0 && localPlaces.length > 0) {
+        if (
+          remotePlaces.length === 0 &&
+          Array.isArray(localPlaces) &&
+          localPlaces.length > 0
+        ) {
           const { places, idMap } = await migrateLocalPlacesToSupabase(
             tripId,
             localPlaces,
           );
           remotePlaces = places;
-          detailData = applyPlaceIdRemapping(tripId, localData, idMap);
+          if (Object.keys(idMap).length > 0) {
+            detailData = applyPlaceIdRemapping(tripId, localData, idMap);
+          }
+        } else if (remotePlaces.length > 0) {
+          console.log("[Supabase Query] places.migrate.skip", {
+            tripId,
+            reason: "remote places already loaded",
+            remoteCount: remotePlaces.length,
+            localCount: localPlaces.length,
+          });
+        } else {
+          console.log("[Supabase Query] places.migrate.skip", {
+            tripId,
+            reason: "localStorage places empty",
+            remoteCount: remotePlaces.length,
+          });
         }
 
         const tripDates = resolveTripDates(detailData.events);

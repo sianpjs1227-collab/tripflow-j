@@ -2,6 +2,10 @@ import { getCurrencyCodeByCountryCode, getCountryFlag } from "@/data/countries";
 import { assignUuidToTripForMigration } from "@/lib/trip-migration";
 import { getSupabaseClient, logSupabaseQueryResult } from "@/lib/supabase";
 import {
+  insertSupabaseTripMember,
+  insertSupabaseTripOwners,
+} from "@/lib/supabase-trip-members";
+import {
   calculateDuration,
   displayDateToIso,
   formatDisplayDate,
@@ -67,24 +71,52 @@ export function supabaseRowToTrip(row: SupabaseTripRow): Trip {
   });
 }
 
-/** user_id 기준 여행 목록 조회 */
+/**
+ * 참여 여행 목록 조회
+ * trip_members 에 속한 trip 만 반환한다.
+ */
 export async function fetchSupabaseTrips(userId: string): Promise<Trip[]> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
 
+  const { data: memberRows, error: memberError } = await client
+    .from("trip_members")
+    .select("trip_id")
+    .eq("user_id", userId);
+
+  logSupabaseQueryResult(
+    "trips.select_via_members",
+    { userId, memberRows },
+    memberError,
+  );
+  if (memberError) throw memberError;
+
+  const tripIds = [
+    ...new Set(
+      (memberRows ?? [])
+        .map((row) => (row as { trip_id: string }).trip_id)
+        .filter(Boolean),
+    ),
+  ];
+
+  if (tripIds.length === 0) {
+    logSupabaseQueryResult("trips.select", { userId, data: [] });
+    return [];
+  }
+
   const { data, error } = await client
     .from("trips")
     .select("*")
-    .eq("user_id", userId)
+    .in("id", tripIds)
     .order("created_at", { ascending: false });
 
-  logSupabaseQueryResult("trips.select", { userId, data }, error);
+  logSupabaseQueryResult("trips.select", { userId, tripIds, data }, error);
   if (error) throw error;
 
   return (data as SupabaseTripRow[]).map(supabaseRowToTrip);
 }
 
-/** 여행 생성 */
+/** 여행 생성 + 생성자를 owner 로 등록 */
 export async function insertSupabaseTrip(
   userId: string,
   trip: Trip,
@@ -97,6 +129,8 @@ export async function insertSupabaseTrip(
 
   logSupabaseQueryResult("trips.insert", { userId, row, data }, error);
   if (error) throw error;
+
+  await insertSupabaseTripMember(trip.id, userId, "owner");
 }
 
 /** 여행 수정 */
@@ -127,7 +161,7 @@ export async function deleteSupabaseTrip(tripId: string): Promise<void> {
 
 /**
  * LocalStorage → Supabase 일괄 이전
- * legacy trip id 를 uuid 로 변환하고 상세 데이터 키도 함께 이전한다.
+ * legacy trip id 를 uuid 로 변환하고 생성자를 owner 로 등록한다.
  */
 export async function migrateLocalTripsToSupabase(
   userId: string,
@@ -145,6 +179,11 @@ export async function migrateLocalTripsToSupabase(
 
   logSupabaseQueryResult("trips.migrate", { userId, rows, data }, error);
   if (error) throw error;
+
+  await insertSupabaseTripOwners(
+    userId,
+    migratedTrips.map((trip) => trip.id),
+  );
 
   return migratedTrips;
 }

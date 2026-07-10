@@ -1,15 +1,17 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Share2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTrips } from "@/contexts/TripContext";
 import type { CreateTripInput, Trip, TripTab } from "@/types/trip";
 import { TripDetailProvider } from "@/contexts/TripDetailContext";
 import { isDepartingToday } from "@/lib/trip-lifecycle";
 import { tripStatusDisplay } from "@/lib/trip-status";
 import { loadMyMapsLink, openMapsUrl } from "@/lib/trip-maps";
+import { fetchMyTripMemberRole } from "@/lib/supabase-trip-members";
 import {
   Button,
   Card,
@@ -20,6 +22,7 @@ import {
 import { cn } from "@/lib/cn";
 import { STICKY_LAYER_VARS, useStickyLayer } from "@/hooks/useStickyLayer";
 import CreateTripModal from "./CreateTripModal";
+import TripInviteSheet from "./TripInviteSheet";
 import TripMoreMenu, {
   type TripSettingsMenuAction,
 } from "./TripMoreMenu";
@@ -33,12 +36,15 @@ interface TripDetailScreenProps {
 
 function TripDetailContent({ trip }: TripDetailScreenProps) {
   const router = useRouter();
+  const { mode: authMode, user } = useAuth();
   const { updateTrip, deleteTrip, getTripById } = useTrips();
   const headerRef = useStickyLayer(STICKY_LAYER_VARS.header);
   const [activeTab, setActiveTab] = useState<TripTab>("schedule");
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isMyMapsSheetOpen, setIsMyMapsSheetOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isInviteSheetOpen, setIsInviteSheetOpen] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
   const [myMapsUrl, setMyMapsUrl] = useState("");
 
   const currentTrip = getTripById(trip.id) ?? trip;
@@ -49,12 +55,40 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
     setMyMapsUrl(loadMyMapsLink(currentTrip.id));
   }, [currentTrip.id, isMyMapsSheetOpen]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOwnerRole() {
+      if (authMode !== "supabase" || !user) {
+        if (!cancelled) setIsOwner(false);
+        return;
+      }
+
+      try {
+        const role = await fetchMyTripMemberRole(currentTrip.id, user.id);
+        if (!cancelled) setIsOwner(role === "owner");
+      } catch (error) {
+        console.error("[TripFlow Invite] role load failed", error);
+        if (!cancelled) setIsOwner(false);
+      }
+    }
+
+    void loadOwnerRole();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authMode, user, currentTrip.id]);
+
   const refreshMyMapsLink = () => {
     setMyMapsUrl(loadMyMapsLink(currentTrip.id));
   };
 
   const handleSettingsAction = (action: TripSettingsMenuAction) => {
     switch (action) {
+      case "share-trip":
+        setIsInviteSheetOpen(true);
+        break;
       case "edit-trip":
         setIsEditModalOpen(true);
         break;
@@ -89,12 +123,27 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
               홈으로
             </Link>
 
-            <TripMoreMenu
-              isOpen={isMoreMenuOpen}
-              onOpen={() => setIsMoreMenuOpen(true)}
-              onClose={() => setIsMoreMenuOpen(false)}
-              onSelect={handleSettingsAction}
-            />
+            <div className="flex items-center gap-1">
+              {isOwner && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsInviteSheetOpen(true)}
+                  className="h-10 w-10 p-0 text-muted"
+                  aria-label="여행 공유"
+                >
+                  <Share2 className="h-5 w-5" aria-hidden />
+                </Button>
+              )}
+              <TripMoreMenu
+                isOpen={isMoreMenuOpen}
+                isOwner={isOwner}
+                onOpen={() => setIsMoreMenuOpen(true)}
+                onClose={() => setIsMoreMenuOpen(false)}
+                onSelect={handleSettingsAction}
+              />
+            </div>
           </div>
 
           <section>
@@ -207,6 +256,13 @@ function TripDetailContent({ trip }: TripDetailScreenProps) {
         isOpen={isMyMapsSheetOpen}
         onClose={() => setIsMyMapsSheetOpen(false)}
         onConnectionChange={refreshMyMapsLink}
+      />
+
+      <TripInviteSheet
+        tripId={currentTrip.id}
+        tripLabel={currentTrip.city}
+        isOpen={isInviteSheetOpen}
+        onClose={() => setIsInviteSheetOpen(false)}
       />
     </div>
   );

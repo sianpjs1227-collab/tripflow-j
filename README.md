@@ -69,6 +69,9 @@ supabase/migrations/<timestamp>_add_notes_index.sql
 | `20260314000004_expenses.sql` | expenses |
 | `20260314000005_checklists.sql` | checklists |
 | `20260314000006_memos.sql` | memos |
+| `20260314000007_trip_members.sql` | trip_members (공유 여행 멤버십) |
+| `20260314000008_trip_invite.sql` | 이메일 초대 RPC + owner insert policy |
+| `20260314000009_detail_rls_members.sql` | places 등 상세 RLS를 trip_members 기준으로 변경 |
 
 ### 4. DB Push (원격 적용)
 

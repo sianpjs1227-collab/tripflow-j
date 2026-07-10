@@ -5,12 +5,14 @@ import {
   Map,
   MoreVertical,
   Pencil,
+  Share2,
   Trash2,
 } from "lucide-react";
 import { Button, OverlayLayer, Text } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 export type TripSettingsMenuAction =
+  | "share-trip"
   | "edit-trip"
   | "manage-mymaps"
   | "delete-trip";
@@ -20,9 +22,16 @@ export interface TripSettingsMenuItem {
   label: string;
   icon: LucideIcon;
   variant?: "default" | "danger";
+  ownerOnly?: boolean;
 }
 
 const MENU_ITEMS: TripSettingsMenuItem[] = [
+  {
+    id: "share-trip",
+    label: "여행 공유",
+    icon: Share2,
+    ownerOnly: true,
+  },
   {
     id: "edit-trip",
     label: "여행 정보 수정",
@@ -43,18 +52,24 @@ const MENU_ITEMS: TripSettingsMenuItem[] = [
 
 interface TripMoreMenuProps {
   isOpen: boolean;
+  isOwner?: boolean;
   onOpen: () => void;
   onClose: () => void;
   onSelect: (action: TripSettingsMenuAction) => void;
 }
 
-/** 여행 설정 메뉴 — 향후 공유·보내기 항목 추가 가능 */
+/** 여행 설정 메뉴 — Owner만 공유 항목 표시 */
 export default function TripMoreMenu({
   isOpen,
+  isOwner = false,
   onOpen,
   onClose,
   onSelect,
 }: TripMoreMenuProps) {
+  const visibleItems = MENU_ITEMS.filter(
+    (item) => !item.ownerOnly || isOwner,
+  );
+
   const handleSelect = (action: TripSettingsMenuAction) => {
     onClose();
     onSelect(action);
@@ -95,7 +110,7 @@ export default function TripMoreMenu({
             </Text>
 
             <ul className="mt-4 space-y-1" role="menu">
-              {MENU_ITEMS.map((item) => {
+              {visibleItems.map((item) => {
                 const Icon = item.icon;
                 const isDanger = item.variant === "danger";
 
