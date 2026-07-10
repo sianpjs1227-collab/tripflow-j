@@ -34,6 +34,9 @@ export const expenseCategories: ExpenseCategory[] = [
 ];
 
 export function generateExpenseId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
   return `expense-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
@@ -47,6 +50,9 @@ export function formatExpenseAmount(
 
 /** 지출 표시용 제목 (메모 또는 분류) */
 export function getExpenseTitle(expense: Expense): string {
+  if (expense.title?.trim()) {
+    return expense.title.trim();
+  }
   if (expense.memo?.trim()) {
     return expense.memo.trim();
   }
@@ -73,26 +79,39 @@ export function createExpenseFromInput(
   trip: Trip,
 ): Expense {
   const amount = Number(input.amount);
+  const trimmedMemo = input.memo.trim();
+  const currency = tripHasExchangeRate(trip) ? trip.currency : "KRW";
+  const baseExpense = {
+    id: generateExpenseId(),
+    date: input.date,
+    amount,
+    category: input.category,
+    currency,
+    title: trimmedMemo || undefined,
+    memo: trimmedMemo || undefined,
+    paidBy: "me" as const,
+    spentAt: `${input.date}T00:00:00.000Z`,
+  };
 
   if (tripHasExchangeRate(trip)) {
     return {
-      id: generateExpenseId(),
-      date: input.date,
-      amount,
+      ...baseExpense,
       krwAmount: convertToKrw(amount, trip.exchangeRate!),
-      category: input.category,
-      memo: input.memo.trim() || undefined,
     };
   }
 
   return {
-    id: generateExpenseId(),
-    date: input.date,
-    amount,
+    ...baseExpense,
     krwAmount: amount,
-    category: input.category,
-    memo: input.memo.trim() || undefined,
   };
+}
+
+export interface ExpenseCategoryTotal {
+  category: ExpenseCategory;
+  primary: string;
+  secondary: string | null;
+  amount: number;
+  krwAmount: number;
 }
 
 export interface ExpenseDisplayAmounts {
@@ -155,6 +174,44 @@ export function formatExpenseTotalDisplay(
     primary: `총 ${formatKrwAmount(totalKrw)}`,
     secondary: null,
   };
+}
+
+export function getExpenseCategoryTotals(
+  expenses: Expense[],
+  trip: Trip,
+): ExpenseCategoryTotal[] {
+  return expenseCategories
+    .map((category) => {
+      const items = expenses.filter((expense) => expense.category === category);
+      const amount = items.reduce((sum, expense) => sum + expense.amount, 0);
+      const krwAmount = items.reduce(
+        (sum, expense) => sum + getExpenseKrwAmount(expense, trip),
+        0,
+      );
+
+      if (items.length === 0) {
+        return null;
+      }
+
+      if (tripHasExchangeRate(trip)) {
+        return {
+          category,
+          amount,
+          krwAmount,
+          primary: formatExpenseAmount(amount, trip.currency),
+          secondary: `≈ ${formatKrwAmount(krwAmount)}`,
+        };
+      }
+
+      return {
+        category,
+        amount,
+        krwAmount,
+        primary: formatKrwAmount(krwAmount),
+        secondary: null,
+      };
+    })
+    .filter((item): item is ExpenseCategoryTotal => item !== null);
 }
 
 /** 날짜 표시 (예: 2026.03.14) */

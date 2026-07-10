@@ -22,6 +22,21 @@ import {
   migrateLocalItinerariesToSupabase,
   syncSupabaseItinerariesDiff,
 } from "@/lib/supabase-itineraries";
+import {
+  fetchSupabaseExpensesByTripId,
+  migrateLocalExpensesToSupabase,
+  syncSupabaseExpensesDiff,
+} from "@/lib/supabase-expenses";
+import {
+  fetchSupabaseChecklistsByTripId,
+  migrateLocalChecklistsToSupabase,
+  syncSupabaseChecklistsDiff,
+} from "@/lib/supabase-checklists";
+import {
+  fetchSupabaseMemosByTripId,
+  migrateLocalMemosToSupabase,
+  syncSupabaseMemosDiff,
+} from "@/lib/supabase-memos";
 import { buildTripDates } from "@/lib/schedule-utils";
 import type { TripDetailData } from "@/types/trip-detail";
 import { createEmptyTripDetailData } from "@/types/trip-detail";
@@ -121,6 +136,28 @@ export function TripDetailProvider({
             next.places,
           );
         }
+
+        if (prev.expenses !== next.expenses || prev.events !== next.events) {
+          await syncSupabaseExpensesDiff(
+            tripId,
+            prev.expenses,
+            next.expenses,
+            prev.events,
+            next.events,
+          );
+        }
+
+        if (prev.checklist !== next.checklist) {
+          await syncSupabaseChecklistsDiff(
+            tripId,
+            prev.checklist,
+            next.checklist,
+          );
+        }
+
+        if (prev.notes !== next.notes) {
+          await syncSupabaseMemosDiff(tripId, prev.notes, next.notes);
+        }
       } catch (error) {
         logContextError("[TripFlow Detail] sync error", error);
         const msg =
@@ -197,12 +234,43 @@ export function TripDetailProvider({
           );
         }
 
+        let remoteExpenses = await fetchSupabaseExpensesByTripId(tripId);
+        const localExpenses = detailData.expenses;
+
+        if (remoteExpenses.length === 0 && localExpenses.length > 0) {
+          remoteExpenses = await migrateLocalExpensesToSupabase(
+            tripId,
+            localExpenses,
+            remoteEvents,
+          );
+        }
+
+        let remoteChecklists = await fetchSupabaseChecklistsByTripId(tripId);
+        const localChecklists = detailData.checklist;
+
+        if (remoteChecklists.length === 0 && localChecklists.length > 0) {
+          remoteChecklists = await migrateLocalChecklistsToSupabase(
+            tripId,
+            localChecklists,
+          );
+        }
+
+        let remoteMemos = await fetchSupabaseMemosByTripId(tripId);
+        const localMemos = detailData.notes;
+
+        if (remoteMemos.length === 0 && localMemos.length > 0) {
+          remoteMemos = await migrateLocalMemosToSupabase(tripId, localMemos);
+        }
+
         if (!cancelled) {
           setDetailStorageMode("supabase");
           setData({
             ...detailData,
             places: remotePlaces,
             events: remoteEvents,
+            expenses: remoteExpenses,
+            checklist: remoteChecklists,
+            notes: remoteMemos,
           });
           setHydrated(true);
         }
@@ -243,6 +311,9 @@ export function TripDetailProvider({
     saveTripDetailDataPreservingRemoteFields(tripId, data, {
       places: true,
       events: true,
+      expenses: true,
+      checklist: true,
+      notes: true,
     });
   }, [tripId, data, hydrated, detailStorageMode]);
 
@@ -251,7 +322,13 @@ export function TripDetailProvider({
       setData((prev) => {
         const next = updater(prev);
 
-        if (prev.places !== next.places || prev.events !== next.events) {
+        if (
+          prev.places !== next.places ||
+          prev.events !== next.events ||
+          prev.expenses !== next.expenses ||
+          prev.checklist !== next.checklist ||
+          prev.notes !== next.notes
+        ) {
           void syncDetailToSupabase(prev, next);
         }
 

@@ -54,7 +54,11 @@ function normalizeExpense(raw: Expense): Expense {
     ...raw,
     amount,
     krwAmount,
+    title: raw.title?.trim() || undefined,
+    currency: raw.currency?.trim() || undefined,
+    paidBy: raw.paidBy?.trim() || undefined,
     memo: raw.memo?.trim() || undefined,
+    spentAt: raw.spentAt?.trim() || undefined,
   };
 }
 
@@ -110,13 +114,22 @@ export function saveTripDetailData(tripId: string, data: TripDetailData): void {
 export function saveTripDetailDataPreservingRemoteFields(
   tripId: string,
   data: TripDetailData,
-  preserve: { places?: boolean; events?: boolean },
+  preserve: {
+    places?: boolean;
+    events?: boolean;
+    expenses?: boolean;
+    checklist?: boolean;
+    notes?: boolean;
+  },
 ): void {
   const existing = loadTripDetailData(tripId);
   saveTripDetailData(tripId, {
     ...data,
     places: preserve.places ? existing.places : data.places,
     events: preserve.events ? existing.events : data.events,
+    expenses: preserve.expenses ? existing.expenses : data.expenses,
+    checklist: preserve.checklist ? existing.checklist : data.checklist,
+    notes: preserve.notes ? existing.notes : data.notes,
   });
 }
 

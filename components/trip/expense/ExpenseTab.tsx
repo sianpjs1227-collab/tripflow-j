@@ -7,6 +7,7 @@ import { useTripDetail } from "@/contexts/TripDetailContext";
 import { formatExchangeRateLabel, tripHasExchangeRate } from "@/lib/currency-utils";
 import {
   createExpenseFromInput,
+  getExpenseCategoryTotals,
   expenseCategoryLabels,
   formatExpenseDate,
   formatExpenseDisplay,
@@ -32,6 +33,10 @@ function ExpenseTabContent({ trip }: ExpenseTabProps) {
 
   const totalDisplay = useMemo(
     () => formatExpenseTotalDisplay(expenses, trip),
+    [expenses, trip],
+  );
+  const categoryTotals = useMemo(
+    () => getExpenseCategoryTotals(expenses, trip),
     [expenses, trip],
   );
 
@@ -63,6 +68,30 @@ function ExpenseTabContent({ trip }: ExpenseTabProps) {
           </Text>
         )}
       </div>
+
+      {categoryTotals.length > 0 && (
+        <Card padding="sm" className="space-y-2">
+          <Text variant="body-medium">카테고리별 합계</Text>
+          <div className="space-y-1.5">
+            {categoryTotals.map((item) => (
+              <div
+                key={item.category}
+                className="flex items-start justify-between gap-3"
+              >
+                <Text variant="muted">{expenseCategoryLabels[item.category]}</Text>
+                <div className="text-right">
+                  <Text variant="body-medium">{item.primary}</Text>
+                  {item.secondary && (
+                    <Text variant="caption" className="text-primary">
+                      {item.secondary}
+                    </Text>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Button type="button" onClick={() => setIsModalOpen(true)} className="w-full">
         지출 추가

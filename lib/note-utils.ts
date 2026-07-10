@@ -1,6 +1,9 @@
 import type { Note, NoteInput } from "@/types/note";
 
 export function generateNoteId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
   return `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
