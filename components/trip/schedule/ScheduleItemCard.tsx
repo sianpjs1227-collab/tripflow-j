@@ -1,3 +1,4 @@
+import { Map } from "lucide-react";
 import type { PlaceCategory } from "@/types/place";
 import type { ScheduleItem } from "@/types/schedule";
 import { placeCategoryIcons, placeCategoryLabels } from "@/lib/place-utils";
@@ -31,7 +32,17 @@ interface ScheduleItemCardProps {
   onOpenPlace: () => void;
 }
 
-/** 일정 카드 — 시간·제목·장소를 한 카드 안에 배치 */
+function getPlaceActionLabel(item: ScheduleItem): string {
+  const hasCoords =
+    item.latitude != null &&
+    item.longitude != null &&
+    !Number.isNaN(item.latitude) &&
+    !Number.isNaN(item.longitude);
+
+  return hasCoords ? "미니맵 보기" : "길찾기";
+}
+
+/** 일정 카드 — 좌(70%) 일정 수정 · 우(30%) 장소/지도 */
 export default function ScheduleItemCard({
   item,
   category = "other",
@@ -46,83 +57,89 @@ export default function ScheduleItemCard({
     item.title.trim().length > 0 &&
     item.title.trim() !== item.placeName.trim() &&
     item.title.trim() !== placeCategoryLabels[category];
+  const showFallbackTitle = !showEventTitle && !hasPlace;
 
   const timeLabel = item.endTime
     ? `${item.time}–${item.endTime}`
     : item.time;
 
+  const placeActionLabel = getPlaceActionLabel(item);
+
   return (
     <li className={cn(!isLast && "mb-1.5")}>
       <div
         className={cn(
-          "overflow-hidden rounded-xl border border-border border-l-[3px] bg-card shadow-sm transition-shadow duration-200 hover:shadow-md",
+          "flex gap-1.5 overflow-hidden rounded-xl border border-border border-l-[3px] p-1.5 shadow-sm",
           categoryAccentBorder[category],
           categoryAccentBg[category],
         )}
       >
-        <div className="px-2.5 py-2">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex w-full items-center gap-1 text-left text-[15px] font-medium leading-none text-muted"
-          >
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label="일정 수정"
+          className={cn(
+            "flex min-h-[4.75rem] min-w-0 flex-col justify-center rounded-lg px-2.5 py-2 text-left",
+            "transition-colors hover:bg-black/[0.04] active:bg-black/[0.08]",
+            hasPlace ? "flex-[7]" : "flex-1",
+          )}
+        >
+          <div className="flex items-center gap-1 text-[15px] font-medium leading-none text-muted">
             <span aria-hidden>🕙</span>
             <time>{timeLabel}</time>
-          </button>
+          </div>
 
           {showEventTitle && (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="mt-1.5 block w-full text-left text-[13px] font-semibold leading-snug text-foreground"
-            >
+            <p className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-snug text-foreground">
               <span aria-hidden>{titleEmoji} </span>
               {item.title}
-            </button>
+            </p>
           )}
 
-          {hasPlace ? (
-            <button
-              type="button"
-              onClick={onOpenPlace}
-              className={cn(
-                "block w-full text-left leading-snug",
-                showEventTitle
-                  ? "mt-0.5 text-[12px] font-medium text-muted"
-                  : "mt-1.5 text-[13px] font-semibold text-foreground",
-              )}
-            >
+          {showFallbackTitle && (
+            <p className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-snug text-foreground">
+              <span aria-hidden>{titleEmoji} </span>
+              {item.title.trim() || "일정"}
+            </p>
+          )}
+
+          {hasPlace && (
+            <p className="mt-1 line-clamp-2 text-[12px] font-medium leading-snug text-muted">
               <span aria-hidden>📍 </span>
               {item.placeName}
-            </button>
-          ) : (
-            !showEventTitle && (
-              <button
-                type="button"
-                onClick={onEdit}
-                className="mt-1.5 block w-full text-left text-[13px] font-semibold leading-snug text-foreground"
-              >
-                <span aria-hidden>{titleEmoji} </span>
-                {item.title || "일정"}
-              </button>
-            )
+            </p>
           )}
 
           {item.memo && (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="mt-1 block w-full text-left"
+            <Text
+              variant="muted"
+              className="mt-1 line-clamp-2 text-[11px] leading-snug"
             >
-              <Text
-                variant="muted"
-                className="line-clamp-1 text-[11px] leading-snug"
-              >
-                {item.memo}
-              </Text>
-            </button>
+              {item.memo}
+            </Text>
           )}
-        </div>
+        </button>
+
+        {hasPlace && (
+          <button
+            type="button"
+            onClick={onOpenPlace}
+            aria-label={`${item.placeName} ${placeActionLabel}`}
+            className={cn(
+              "flex min-h-[4.75rem] min-w-0 flex-[3] flex-col items-center justify-center gap-1",
+              "rounded-lg border border-border/80 bg-background/95 px-2 py-2 text-center shadow-sm",
+              "transition-colors hover:bg-background active:bg-primary/10",
+            )}
+          >
+            <Map className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+            <span className="line-clamp-2 w-full text-[11px] font-semibold leading-tight text-foreground">
+              {item.placeName}
+            </span>
+            <span className="text-[10px] font-medium text-primary">
+              {placeActionLabel}
+            </span>
+          </button>
+        )}
       </div>
     </li>
   );
