@@ -23,11 +23,18 @@ export default function TripTabHeader({
   return (
     <div className={cn("flex items-center justify-between gap-2", className)}>
       <div className="min-w-0">
-        <Text variant="title-sm" as="h2" className="text-base font-bold">
+        <Text
+          variant="title-sm"
+          as="h2"
+          className="text-lg font-bold sm:text-base"
+        >
           {title}
         </Text>
         {meta ? (
-          <Text variant="caption" className="mt-0.5 block text-[11px]">
+          <Text
+            variant="caption"
+            className="mt-0.5 block text-[12.5px] sm:text-[11px]"
+          >
             {meta}
           </Text>
         ) : null}
@@ -37,9 +44,9 @@ export default function TripTabHeader({
           type="button"
           onClick={onAdd}
           size="sm"
-          className="h-8 shrink-0 px-2.5 text-[11px]"
+          className="h-9 shrink-0 px-2.5 text-[12.5px] sm:h-8 sm:text-[11px]"
         >
-          <Plus className="h-3.5 w-3.5" aria-hidden />
+          <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden />
           {addLabel}
         </Button>
       )}

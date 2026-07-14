@@ -257,7 +257,7 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
         <>
           <div
             ref={dayChipsRef}
-            className="sticky-layer-day-chips -mx-4 border-b border-border bg-background/95 px-4 py-1 backdrop-blur-md sm:-mx-5 sm:px-5"
+            className="sticky-layer-day-chips -mx-4 border-b border-border bg-background/95 px-4 py-1.5 backdrop-blur-md sm:-mx-5 sm:px-5 sm:py-1"
           >
             <div className="scrollbar-hide overflow-x-auto">
               <div className="flex w-max gap-1">
@@ -269,14 +269,14 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
                       key={day.date}
                       active={isSelected}
                       onClick={() => setSelectedDate(day.date)}
-                      className="h-8 min-w-[3.5rem] flex-col gap-0 px-2 py-0 text-[11px] transition-all duration-200"
+                      className="h-9 min-w-[4rem] flex-col gap-0 px-2 py-0 text-[12.5px] transition-all duration-200 sm:h-8 sm:min-w-[3.5rem] sm:text-[11px]"
                     >
-                      <span className="text-[11px] font-semibold leading-none">
+                      <span className="text-[12.5px] font-semibold leading-none sm:text-[11px]">
                         DAY{day.dayNumber}
                       </span>
                       <span
                         className={cn(
-                          "text-[10px] leading-none",
+                          "text-[11px] leading-none sm:text-[10px]",
                           isSelected ? "text-white/85" : "text-muted",
                         )}
                       >

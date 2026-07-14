@@ -46,7 +46,7 @@ export default function TripTabs({ activeTab, onTabChange }: TripTabsProps) {
                 type="button"
                 onClick={() => onTabChange(tab.id)}
                 className={cn(
-                  "flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2.5 transition-all duration-200 ease-out sm:flex-1 sm:justify-center",
+                  "flex h-9 shrink-0 items-center gap-1 rounded-lg border px-2.5 transition-all duration-200 ease-out sm:h-8 sm:flex-1 sm:justify-center",
                   isActive
                     ? "border-border bg-card text-primary shadow-sm"
                     : "border-transparent text-muted hover:border-border hover:bg-card hover:text-foreground",
@@ -55,12 +55,12 @@ export default function TripTabs({ activeTab, onTabChange }: TripTabsProps) {
               >
                 <Icon
                   className={cn(
-                    "h-3.5 w-3.5 shrink-0 transition-colors duration-200",
+                    "h-4 w-4 shrink-0 transition-colors duration-200 sm:h-3.5 sm:w-3.5",
                     isActive ? "text-primary" : "text-muted",
                   )}
                   aria-hidden
                 />
-                <span className="whitespace-nowrap text-[11px] font-medium">
+                <span className="whitespace-nowrap text-[12.5px] font-medium sm:text-[11px]">
                   {tab.label}
                 </span>
               </button>

@@ -37,7 +37,7 @@ export default function ScheduleDaySubviewTabs({
             aria-selected={isActive}
             onClick={() => onChange(view.id)}
             className={cn(
-              "flex h-8 flex-1 items-center justify-center rounded-lg px-2 text-[11px] font-medium transition-all duration-200 ease-out",
+              "flex h-9 flex-1 items-center justify-center rounded-lg px-2 text-[12.5px] font-medium transition-all duration-200 ease-out sm:h-8 sm:text-[11px]",
               isActive
                 ? "bg-card text-primary shadow-sm"
                 : "text-muted hover:text-foreground",

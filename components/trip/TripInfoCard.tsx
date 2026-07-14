@@ -105,17 +105,17 @@ export default function TripInfoCard({
       <button
         type="button"
         onClick={toggleExpanded}
-        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left transition-colors hover:bg-background/80"
+        className="flex w-full items-center gap-1.5 px-2.5 py-2 text-left transition-colors hover:bg-background/80 sm:py-1.5"
         aria-expanded={expanded}
         aria-label={expanded ? "여행정보 접기" : "여행정보 펼치기"}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
           <CountryFlag
             code={trip.countryCode}
-            className="shrink-0 text-sm leading-none"
+            className="shrink-0 text-base leading-none sm:text-sm"
             label={trip.country}
           />
-          <span className="min-w-0 truncate text-[11px] font-semibold leading-tight text-foreground">
+          <span className="min-w-0 truncate text-[12.5px] font-semibold leading-tight text-foreground sm:text-[11px]">
             <span>{trip.city}</span>
             <span className="font-normal text-muted"> | </span>
             <span className="font-medium">
@@ -139,9 +139,9 @@ export default function TripInfoCard({
         </div>
 
         {expanded ? (
-          <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
+          <ChevronUp className="h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5" aria-hidden />
         ) : (
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5" aria-hidden />
         )}
       </button>
 
