@@ -105,7 +105,7 @@ export default function TripInfoCard({
       <button
         type="button"
         onClick={toggleExpanded}
-        className="flex w-full items-center gap-1.5 px-2.5 py-2 text-left transition-colors hover:bg-background/80 sm:py-1.5"
+        className="flex min-h-12 w-full items-center gap-1.5 px-2.5 py-3.5 text-left transition-colors hover:bg-background/80 sm:min-h-0 sm:py-2"
         aria-expanded={expanded}
         aria-label={expanded ? "여행정보 접기" : "여행정보 펼치기"}
       >
@@ -146,7 +146,7 @@ export default function TripInfoCard({
       </button>
 
       {expanded && (
-        <div className="space-y-2 border-t border-border px-2.5 pb-2 pt-2 animate-fade-in">
+        <div className="space-y-2 border-t border-border px-2.5 pb-3 pt-2.5 animate-fade-in sm:pb-2 sm:pt-2">
           <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
             <CountryFlag
               code={trip.countryCode}
