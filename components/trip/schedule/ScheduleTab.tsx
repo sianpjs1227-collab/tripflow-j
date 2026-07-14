@@ -14,6 +14,7 @@ import {
   buildTripDates,
   formatScheduleChipDate,
   groupEventsByDate,
+  partitionScheduleItemsByTime,
   sortEvents,
 } from "@/lib/schedule-utils";
 import {
@@ -325,22 +326,78 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
                         </Button>
                       </Card>
                     ) : (
-                      <ul className="space-y-1.5" role="list">
-                        {selectedDay.items.map((item, index) => {
-                          const place = getPlaceById(data.places, item.placeId);
+                      (() => {
+                        const { timed, untimed } = partitionScheduleItemsByTime(
+                          selectedDay.items,
+                        );
 
-                          return (
-                            <ScheduleItemCard
-                              key={item.id}
-                              item={item}
-                              category={place?.category ?? "other"}
-                              isLast={index === selectedDay.items.length - 1}
-                              onEdit={() => openEditModal(item)}
-                              onOpenPlace={() => handleOpenSchedulePlace(item)}
-                            />
-                          );
-                        })}
-                      </ul>
+                        return (
+                          <div className="space-y-3">
+                            {timed.length > 0 && (
+                              <ul className="space-y-1.5" role="list">
+                                {timed.map((item, index) => {
+                                  const place = getPlaceById(
+                                    data.places,
+                                    item.placeId,
+                                  );
+
+                                  return (
+                                    <ScheduleItemCard
+                                      key={item.id}
+                                      item={item}
+                                      category={place?.category ?? "other"}
+                                      isLast={
+                                        index === timed.length - 1 &&
+                                        untimed.length === 0
+                                      }
+                                      onEdit={() => openEditModal(item)}
+                                      onOpenPlace={() =>
+                                        handleOpenSchedulePlace(item)
+                                      }
+                                    />
+                                  );
+                                })}
+                              </ul>
+                            )}
+
+                            {untimed.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 px-0.5 pt-1">
+                                  <div className="h-px flex-1 bg-border" />
+                                  <Text
+                                    variant="caption"
+                                    className="shrink-0 text-[11px] font-medium text-muted"
+                                  >
+                                    🕒 시간 미정
+                                  </Text>
+                                  <div className="h-px flex-1 bg-border" />
+                                </div>
+                                <ul className="space-y-1.5" role="list">
+                                  {untimed.map((item, index) => {
+                                    const place = getPlaceById(
+                                      data.places,
+                                      item.placeId,
+                                    );
+
+                                    return (
+                                      <ScheduleItemCard
+                                        key={item.id}
+                                        item={item}
+                                        category={place?.category ?? "other"}
+                                        isLast={index === untimed.length - 1}
+                                        onEdit={() => openEditModal(item)}
+                                        onOpenPlace={() =>
+                                          handleOpenSchedulePlace(item)
+                                        }
+                                      />
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()
                     )}
                   </>
                 )}
@@ -381,7 +438,7 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
                                 </span>
                                 <div className="min-w-0 flex-1">
                                   <Text variant="muted" className="text-xs">
-                                    {item.time}
+                                    {item.time?.trim() || "시간 미정"}
                                   </Text>
                                   <Text variant="body-medium" className="font-medium">
                                     {item.placeName}

@@ -3,6 +3,7 @@ import type { PlaceCategory } from "@/types/place";
 import type { ScheduleItem } from "@/types/schedule";
 import { placeCategoryIcons, placeCategoryLabels } from "@/lib/place-utils";
 import { inferQuickScheduleFromTitle } from "@/lib/quick-schedule";
+import { hasScheduleTime } from "@/lib/schedule-utils";
 import { Text } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
@@ -59,9 +60,11 @@ export default function ScheduleItemCard({
     item.title.trim() !== placeCategoryLabels[category];
   const showFallbackTitle = !showEventTitle && !hasPlace;
 
-  const timeLabel = item.endTime
-    ? `${item.time}–${item.endTime}`
-    : item.time;
+  const timeLabel = !hasScheduleTime(item.time)
+    ? "시간 미정"
+    : item.endTime
+      ? `${item.time}–${item.endTime}`
+      : (item.time as string);
 
   const placeActionLabel = getPlaceActionLabel(item);
 

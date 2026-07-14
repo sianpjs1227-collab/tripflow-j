@@ -63,8 +63,10 @@ export function eventToItineraryInsert(
     trip_id: tripId,
     place_id: resolvePlaceId(event.placeId, validPlaceIds),
     day_number: resolveEventDayNumber(event, tripDates),
-    start_time: event.time,
-    end_time: event.endTime?.trim() || null,
+    start_time: event.time?.trim() || null,
+    end_time: event.time?.trim()
+      ? event.endTime?.trim() || null
+      : null,
     title: event.title,
     memo: event.memo ?? null,
     sort_order: sortOrder,
@@ -79,7 +81,7 @@ export function itineraryRowToEvent(
   return {
     id: row.id,
     date: resolveDayNumberToDate(row.day_number, tripDates),
-    time: row.start_time,
+    time: row.start_time?.trim() || null,
     endTime: row.end_time?.trim() || undefined,
     title: row.title,
     placeId: row.place_id ?? "",

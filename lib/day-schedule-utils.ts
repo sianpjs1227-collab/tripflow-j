@@ -1,5 +1,9 @@
 import type { ScheduleItem } from "@/types/schedule";
 import type { GeoPosition } from "@/lib/directions";
+import {
+  compareScheduleTime,
+  hasScheduleTime,
+} from "@/lib/schedule-utils";
 
 export const MIN_GAP_HOURS = 2;
 
@@ -48,11 +52,18 @@ export function getScheduleItemCoords(
   return null;
 }
 
-/** 장소가 등록된 일정만 시간순 */
+/** 빈시간·경로 계산용 — 시간이 지정된 일정만 */
+function getTimedScheduleItems(items: ScheduleItem[]): ScheduleItem[] {
+  return items
+    .filter((item) => hasScheduleTime(item.time))
+    .sort((a, b) => compareScheduleTime(a.time, b.time));
+}
+
+/** 장소가 등록된 일정만 시간순 (시간 미정은 뒤) */
 export function getDayRouteItems(items: ScheduleItem[]): ScheduleItem[] {
   return [...items]
     .filter((item) => item.placeId && item.placeName.trim())
-    .sort((a, b) => a.time.localeCompare(b.time));
+    .sort((a, b) => compareScheduleTime(a.time, b.time));
 }
 
 /** Day 경로용 Google Maps URL (시간순 경유지) */
@@ -86,21 +97,21 @@ export function buildDayRouteUrl(items: ScheduleItem[]): string | null {
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
-/** 연속 일정 사이 빈 시간 분석 */
+/** 연속 일정 사이 빈 시간 분석 — 시간 미정 일정은 제외 */
 export function analyzeDayGaps(items: ScheduleItem[]): DayGap[] {
-  const sorted = [...items].sort((a, b) => a.time.localeCompare(b.time));
+  const sorted = getTimedScheduleItems(items);
   const gaps: DayGap[] = [];
   const minGapMinutes = MIN_GAP_HOURS * 60;
 
   for (let i = 0; i < sorted.length - 1; i += 1) {
-    const startMin = timeToMinutes(sorted[i].time);
-    const endMin = timeToMinutes(sorted[i + 1].time);
+    const startMin = timeToMinutes(sorted[i].time as string);
+    const endMin = timeToMinutes(sorted[i + 1].time as string);
     const durationMinutes = endMin - startMin;
 
     if (durationMinutes >= minGapMinutes) {
       gaps.push({
-        startTime: sorted[i].time,
-        endTime: sorted[i + 1].time,
+        startTime: sorted[i].time as string,
+        endTime: sorted[i + 1].time as string,
         durationMinutes,
         durationLabel: formatGapDuration(durationMinutes),
       });
@@ -124,7 +135,7 @@ export function getPreviousScheduleItemForGap(
   gap: DayGap,
   items: ScheduleItem[],
 ): ScheduleItem | null {
-  const sorted = [...items].sort((a, b) => a.time.localeCompare(b.time));
+  const sorted = getTimedScheduleItems(items);
 
   for (let i = 0; i < sorted.length - 1; i += 1) {
     if (
@@ -144,7 +155,7 @@ export function getGapAnchor(
   items: ScheduleItem[],
   userPosition?: GeoPosition | null,
 ): GeoPosition | null {
-  const sorted = [...items].sort((a, b) => a.time.localeCompare(b.time));
+  const sorted = getTimedScheduleItems(items);
 
   for (let i = 0; i < sorted.length - 1; i += 1) {
     if (sorted[i].time !== gap.startTime) continue;

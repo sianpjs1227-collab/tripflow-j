@@ -56,6 +56,7 @@ export default function ScheduleModal({
 }: ScheduleModalProps) {
   const [form, setForm] = useState<ScheduleInput>(EMPTY_FORM);
   const [showEndTime, setShowEndTime] = useState(false);
+  const [isTimeUndetermined, setIsTimeUndetermined] = useState(false);
   const [error, setError] = useState("");
   const [isPlacePickerOpen, setIsPlacePickerOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -71,27 +72,32 @@ export default function ScheduleModal({
 
     if (editingItem) {
       const endTime = editingItem.endTime?.trim() ?? "";
+      const undetermined = !editingItem.time?.trim();
       setForm({
         date: editingItem.date,
-        time: editingItem.time,
-        endTime,
+        time: editingItem.time?.trim() ?? "",
+        endTime: undetermined ? "" : endTime,
         title: editingItem.title,
         placeId: editingItem.placeId,
         memo: editingItem.memo ?? "",
       });
-      setShowEndTime(Boolean(endTime));
+      setIsTimeUndetermined(undetermined);
+      setShowEndTime(!undetermined && Boolean(endTime));
     } else {
       const endTime = initialForm?.endTime?.trim() ?? "";
+      const initialTime = initialForm?.time?.trim() ?? "";
+      const undetermined = initialForm?.time !== undefined && !initialTime;
       setForm({
         ...EMPTY_FORM,
         date: initialForm?.date ?? defaultDate,
-        time: initialForm?.time ?? "",
+        time: initialTime,
         endTime,
         title: initialForm?.title ?? "",
         placeId: initialForm?.placeId ?? "",
         memo: initialForm?.memo ?? "",
       });
-      setShowEndTime(Boolean(endTime));
+      setIsTimeUndetermined(undetermined);
+      setShowEndTime(!undetermined && Boolean(endTime));
     }
     setError("");
     setIsPlacePickerOpen(false);
@@ -118,10 +124,27 @@ export default function ScheduleModal({
     setIsPlacePickerOpen(false);
   };
 
+  const handleToggleTimeUndetermined = () => {
+    setIsTimeUndetermined((prev) => {
+      const next = !prev;
+      if (next) {
+        setForm((current) => ({ ...current, time: "", endTime: "" }));
+        setShowEndTime(false);
+      }
+      return next;
+    });
+    setError("");
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.date || !form.time || !form.title.trim()) {
+    if (!form.date || !form.title.trim()) {
+      setError("날짜와 일정 제목을 입력해주세요.");
+      return;
+    }
+
+    if (!isTimeUndetermined && !form.time.trim()) {
       setError("날짜, 시작시간, 일정 제목을 입력해주세요.");
       return;
     }
@@ -131,18 +154,22 @@ export default function ScheduleModal({
       return;
     }
 
-    const endTime = showEndTime ? form.endTime.trim() : "";
-    if (endTime && timeToMinutes(endTime) < timeToMinutes(form.time)) {
+    const time = isTimeUndetermined ? "" : form.time.trim();
+    const endTime =
+      !isTimeUndetermined && showEndTime ? form.endTime.trim() : "";
+    if (time && endTime && timeToMinutes(endTime) < timeToMinutes(time)) {
       setError("종료시간은 시작시간 이후여야 합니다.");
       return;
     }
 
     onSave({
       ...form,
+      time,
       endTime,
     });
     setForm(EMPTY_FORM);
     setShowEndTime(false);
+    setIsTimeUndetermined(false);
     setError("");
     onClose();
   };
@@ -153,6 +180,7 @@ export default function ScheduleModal({
     onDelete(editingItem.id);
     setForm(EMPTY_FORM);
     setShowEndTime(false);
+    setIsTimeUndetermined(false);
     setError("");
     onClose();
   };
@@ -160,6 +188,7 @@ export default function ScheduleModal({
   const handleClose = () => {
     setForm(EMPTY_FORM);
     setShowEndTime(false);
+    setIsTimeUndetermined(false);
     setError("");
     setIsPlacePickerOpen(false);
     onClose();
@@ -190,36 +219,59 @@ export default function ScheduleModal({
               />
             </label>
 
-            <TimePicker
-              label="🕒 시작시간"
-              value={form.time}
-              onChange={(time) => handleChange("time", time)}
-              placeholder="시작시간 선택"
-            />
-
-            {showEndTime ? (
-              <TimePicker
-                label="🕒 종료시간"
-                value={form.endTime}
-                onChange={(endTime) => handleChange("endTime", endTime)}
-                placeholder="종료시간 선택"
-                onClear={() => {
-                  setShowEndTime(false);
-                  handleChange("endTime", "");
-                }}
-                clearLabel="제거"
-              />
+            {isTimeUndetermined ? (
+              <div className="block space-y-2">
+                <Text variant="label" as="span">
+                  🕒 시작시간
+                </Text>
+                <div className="flex h-11 items-center rounded-xl border border-border bg-background px-3.5 text-sm font-medium text-muted">
+                  🕒 시간 미정
+                </div>
+              </div>
             ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setShowEndTime(true)}
-                className="h-11 w-full justify-start gap-2 px-1 text-primary"
-              >
-                <Plus className="h-4 w-4" aria-hidden />
-                종료시간 추가
-              </Button>
+              <TimePicker
+                label="🕒 시작시간"
+                value={form.time}
+                onChange={(time) => handleChange("time", time)}
+                placeholder="시작시간 선택"
+              />
             )}
+
+            {!isTimeUndetermined &&
+              (showEndTime ? (
+                <TimePicker
+                  label="🕒 종료시간"
+                  value={form.endTime}
+                  onChange={(endTime) => handleChange("endTime", endTime)}
+                  placeholder="종료시간 선택"
+                  onClear={() => {
+                    setShowEndTime(false);
+                    handleChange("endTime", "");
+                  }}
+                  clearLabel="제거"
+                />
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowEndTime(true)}
+                  className="h-11 w-full justify-start gap-2 px-1 text-primary"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                  종료시간 추가
+                </Button>
+              ))}
+
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleToggleTimeUndetermined}
+              className="h-auto w-full justify-start px-1 py-1 text-sm font-medium text-primary"
+            >
+              {isTimeUndetermined
+                ? "🕒 시간 선택하기"
+                : "🕒 시간은 나중에 정하기"}
+            </Button>
 
             <QuickScheduleSelect
               title={form.title}

@@ -1,4 +1,42 @@
 import type { Event } from "@/types/event";
+import type { ScheduleItem } from "@/types/schedule";
+
+/** 시간이 지정된 일정인지 (시간 미정 제외) */
+export function hasScheduleTime(
+  time: string | null | undefined,
+): boolean {
+  return Boolean(time?.trim());
+}
+
+/** 시간 비교 — 지정 일정 먼저, 미정은 뒤로 (확장·정렬용 SoT) */
+export function compareScheduleTime(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): number {
+  const aHas = hasScheduleTime(a);
+  const bHas = hasScheduleTime(b);
+  if (aHas && bHas) return (a as string).localeCompare(b as string);
+  if (aHas) return -1;
+  if (bHas) return 1;
+  return 0;
+}
+
+/** 시간 지정 / 시간 미정으로 분리 (시간순 섹션용) */
+export function partitionScheduleItemsByTime(items: ScheduleItem[]): {
+  timed: ScheduleItem[];
+  untimed: ScheduleItem[];
+} {
+  const timed: ScheduleItem[] = [];
+  const untimed: ScheduleItem[] = [];
+
+  for (const item of items) {
+    if (hasScheduleTime(item.time)) timed.push(item);
+    else untimed.push(item);
+  }
+
+  timed.sort((a, b) => compareScheduleTime(a.time, b.time));
+  return { timed, untimed };
+}
 
 /** 날짜 표시 (예: 2026.03.14) */
 export function formatScheduleDate(date: string): string {
@@ -18,11 +56,11 @@ export function formatScheduleChipDate(isoDate: string): string {
   return `${month.padStart(2, "0")}.${day.padStart(2, "0")}`;
 }
 
-/** 날짜 → 시간 순으로 정렬 */
+/** 날짜 → 시간 순으로 정렬 (시간 미정은 각 날짜 맨 뒤) */
 export function sortEvents(items: Event[]): Event[] {
   return [...items].sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
-    return a.time.localeCompare(b.time);
+    return compareScheduleTime(a.time, b.time);
   });
 }
 
@@ -47,11 +85,11 @@ export function groupEventsByDate(
 
 /** @deprecated groupEventsByDate 사용 — ScheduleItem 호환 */
 export function groupSchedulesByDate(
-  items: { date: string; time: string }[],
+  items: { date: string; time: string | null }[],
 ): { date: string; items: typeof items }[] {
   const sorted = [...items].sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
-    return a.time.localeCompare(b.time);
+    return compareScheduleTime(a.time, b.time);
   });
   const groups: { date: string; items: typeof items }[] = [];
 

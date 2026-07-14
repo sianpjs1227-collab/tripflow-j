@@ -21,7 +21,7 @@ export function toScheduleItem(
   return {
     id: event.id,
     date: event.date,
-    time: event.time,
+    time: event.time?.trim() || null,
     endTime: event.endTime,
     title: event.title,
     placeId: event.placeId,
@@ -48,11 +48,12 @@ export function buildEventFromInput(
   input: ScheduleInput,
   existingId?: string,
 ): Event {
-  const endTime = input.endTime.trim();
+  const time = input.time.trim() || null;
+  const endTime = time ? input.endTime.trim() : "";
   return {
     id: existingId ?? generateEventId(),
     date: input.date,
-    time: input.time,
+    time,
     endTime: endTime || undefined,
     title: input.title.trim(),
     placeId: input.placeId,

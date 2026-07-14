@@ -6,9 +6,9 @@ export interface Event {
   id: string;
   /** 날짜 (YYYY-MM-DD) */
   date: string;
-  /** 시작 시간 (HH:mm) */
-  time: string;
-  /** 종료 시간 (HH:mm, 선택) */
+  /** 시작 시간 (HH:mm). null = 시간 미정 */
+  time: string | null;
+  /** 종료 시간 (HH:mm, 선택) — 시간 미정 시 사용하지 않음 */
   endTime?: string;
   /** 일정 제목 */
   title: string;

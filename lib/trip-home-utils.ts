@@ -117,13 +117,19 @@ export function getHeroScheduleSnapshot(
     .filter((event) => {
       if (event.date > todayIso) return true;
       if (event.date < todayIso) return false;
+      if (!event.time?.trim()) return true;
       const [hours, minutes] = event.time.split(":").map(Number);
       if (Number.isNaN(hours) || Number.isNaN(minutes)) return true;
       return hours * 60 + minutes >= nowMinutes;
     })
     .sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return a.time.localeCompare(b.time);
+      const aHas = Boolean(a.time?.trim());
+      const bHas = Boolean(b.time?.trim());
+      if (aHas && bHas) return (a.time as string).localeCompare(b.time as string);
+      if (aHas) return -1;
+      if (bHas) return 1;
+      return 0;
     });
 
   const next = upcoming[0];
@@ -133,7 +139,7 @@ export function getHeroScheduleSnapshot(
     nextSchedule: next
       ? {
           title: next.title,
-          time: next.time,
+          time: next.time?.trim() || "시간 미정",
           dateLabel: formatNextScheduleDateLabel(next.date, todayIso),
         }
       : null,

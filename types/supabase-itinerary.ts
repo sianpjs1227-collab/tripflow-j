@@ -4,7 +4,8 @@ export interface SupabaseItineraryRow {
   trip_id: string;
   place_id: string | null;
   day_number: number;
-  start_time: string;
+  /** HH:mm — null = 시간 미정 */
+  start_time: string | null;
   end_time: string | null;
   title: string;
   memo: string | null;
@@ -18,7 +19,8 @@ export interface SupabaseItineraryInsert {
   trip_id: string;
   place_id: string | null;
   day_number: number;
-  start_time: string;
+  /** HH:mm — null = 시간 미정 */
+  start_time: string | null;
   end_time: string | null;
   title: string;
   memo: string | null;
@@ -28,7 +30,8 @@ export interface SupabaseItineraryInsert {
 export interface SupabaseItineraryUpdate {
   place_id: string | null;
   day_number: number;
-  start_time: string;
+  /** HH:mm — null = 시간 미정 */
+  start_time: string | null;
   end_time: string | null;
   title: string;
   memo: string | null;

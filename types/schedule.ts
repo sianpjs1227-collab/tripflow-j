@@ -6,7 +6,8 @@
 export interface ScheduleItem {
   id: string;
   date: string;
-  time: string;
+  /** 시작 시간 (HH:mm). null = 시간 미정 */
+  time: string | null;
   /** 종료 시간 (선택) */
   endTime?: string;
   title: string;
@@ -26,6 +27,10 @@ export interface ScheduleItem {
 /** 일정 추가/수정 폼 입력 (UI) — Place.placeId 참조 */
 export interface ScheduleInput {
   date: string;
+  /**
+   * 시작 시간 (HH:mm).
+   * 빈 문자열 = 시간 미정 (저장 시 Event.time = null)
+   */
   time: string;
   /** 종료 시간 (선택, 빈 문자열 = 없음) */
   endTime: string;
