@@ -139,9 +139,15 @@ export default function TripInfoCard({
         </div>
 
         {expanded ? (
-          <ChevronUp className="h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5" aria-hidden />
+          <ChevronUp
+            className="h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5"
+            aria-hidden
+          />
         ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5" aria-hidden />
+          <ChevronDown
+            className="h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5"
+            aria-hidden
+          />
         )}
       </button>
 
@@ -167,7 +173,10 @@ export default function TripInfoCard({
           )}
 
           <div className="rounded-xl border border-border bg-background px-2.5 py-2">
-            <Text variant="caption" className="mb-1.5 block text-[11px] font-medium">
+            <Text
+              variant="caption"
+              className="mb-1.5 block text-[11px] font-medium"
+            >
               My Maps
             </Text>
             <div className="flex gap-2">
