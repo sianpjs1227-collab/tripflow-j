@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { CalendarPlus, Navigation, Star } from "lucide-react";
 import type { Place, PlaceTravelRecordInput } from "@/types/place";
@@ -25,7 +25,7 @@ import {
 import {
   hasTravelRecordContent,
 } from "@/lib/place-visit";
-import { Button, Card, OverlayLayer, Text } from "@/components/ui";
+import { Button, Card, OverlayLayer, SHEET_EXIT_MS, Text } from "@/components/ui";
 import PlaceTravelRecordSheet from "@/components/trip/places/PlaceTravelRecordSheet";
 import { cn } from "@/lib/cn";
 
@@ -223,15 +223,26 @@ export default function PlaceActionSheet({
   );
   const [locationLoading, setLocationLoading] = useState(false);
   const [isRecordOpen, setIsRecordOpen] = useState(false);
+  const [pendingDeletePlace, setPendingDeletePlace] = useState<Place | null>(
+    null,
+  );
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const deleteConfirmTimerRef = useRef<number | null>(null);
   const distanceInfo = useDistanceInfo(previewState, currentPosition);
 
   useEffect(() => {
     if (!previewState) {
       setIsRecordOpen(false);
-      setIsDeleteConfirmOpen(false);
     }
   }, [previewState]);
+
+  useEffect(() => {
+    return () => {
+      if (deleteConfirmTimerRef.current != null) {
+        window.clearTimeout(deleteConfirmTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!previewState) return;
@@ -251,25 +262,160 @@ export default function PlaceActionSheet({
       .finally(() => setLocationLoading(false));
   }, [previewState, knownCurrentPosition]);
 
-  if (!previewState) return null;
+  const handleCancelDelete = () => {
+    if (deleteConfirmTimerRef.current != null) {
+      window.clearTimeout(deleteConfirmTimerRef.current);
+      deleteConfirmTimerRef.current = null;
+    }
+    setIsDeleteConfirmOpen(false);
+    setPendingDeletePlace(null);
+  };
 
-  const { location, actionsSource } = previewState;
-  const livePlace = getPlace?.(actionsSource.id) ?? actionsSource;
-  const categoryIcon = placeCategoryIcons[actionsSource.category];
-  const categoryLabel = placeCategoryLabels[actionsSource.category];
-  const canDelete =
-    Boolean(onDeletePlace) && previewStateHasPlaceActions(previewState);
+  const handleConfirmDelete = () => {
+    if (pendingDeletePlace) {
+      onDeletePlace?.(pendingDeletePlace);
+    }
+    handleCancelDelete();
+  };
+
+  if (!previewState && !pendingDeletePlace && !isDeleteConfirmOpen) {
+    return null;
+  }
+
+  const livePlace = previewState
+    ? (getPlace?.(previewState.actionsSource.id) ?? previewState.actionsSource)
+    : pendingDeletePlace;
+
+  const handleRequestDelete = () => {
+    if (!previewState || !livePlace) return;
+
+    setPendingDeletePlace(livePlace);
+    onClose();
+
+    if (deleteConfirmTimerRef.current != null) {
+      window.clearTimeout(deleteConfirmTimerRef.current);
+    }
+    deleteConfirmTimerRef.current = window.setTimeout(() => {
+      setIsDeleteConfirmOpen(true);
+      deleteConfirmTimerRef.current = null;
+    }, SHEET_EXIT_MS);
+  };
 
   const handleSaveRecord = (placeId: string, input: PlaceTravelRecordInput) => {
     onSaveTravelRecord?.(placeId, input);
     setIsRecordOpen(false);
   };
 
-  const handleConfirmDelete = () => {
-    onDeletePlace?.(livePlace);
-    setIsDeleteConfirmOpen(false);
-    onClose();
-  };
+  return (
+    <>
+      {previewState && (
+        <PlaceActionSheetBody
+          previewState={previewState}
+          currentPosition={currentPosition}
+          locationLoading={locationLoading}
+          distanceInfo={distanceInfo}
+          isFavorite={isFavorite}
+          onToggleFavorite={onToggleFavorite}
+          onAddToSchedule={onAddToSchedule}
+          onRequestDelete={
+            onDeletePlace && previewStateHasPlaceActions(previewState)
+              ? handleRequestDelete
+              : undefined
+          }
+          getPlace={getPlace}
+          onSaveTravelRecord={
+            onSaveTravelRecord
+              ? () => setIsRecordOpen(true)
+              : undefined
+          }
+          onClose={onClose}
+        />
+      )}
+
+      {isDeleteConfirmOpen && pendingDeletePlace && (
+        <OverlayLayer
+          centered
+          onClose={handleCancelDelete}
+          closeLabel="삭제 취소"
+        >
+          <Card
+            padding="lg"
+            className="w-full bg-card shadow-xl"
+            role="dialog"
+            aria-labelledby="place-delete-confirm-title"
+          >
+            <Text
+              variant="title-sm"
+              as="h2"
+              id="place-delete-confirm-title"
+              className="text-center"
+            >
+              이 장소를 삭제하시겠습니까?
+            </Text>
+            <div className="mt-5 flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleCancelDelete}
+                className="flex-1"
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="flex-1 bg-danger text-white hover:bg-danger/90 active:bg-danger/95"
+              >
+                삭제
+              </Button>
+            </div>
+          </Card>
+        </OverlayLayer>
+      )}
+
+      {previewState && onSaveTravelRecord && livePlace && (
+        <PlaceTravelRecordSheet
+          isOpen={isRecordOpen}
+          place={livePlace}
+          onClose={() => setIsRecordOpen(false)}
+          onSave={handleSaveRecord}
+        />
+      )}
+    </>
+  );
+}
+
+function PlaceActionSheetBody({
+  previewState,
+  currentPosition,
+  locationLoading,
+  distanceInfo,
+  isFavorite,
+  onToggleFavorite,
+  onAddToSchedule,
+  onRequestDelete,
+  getPlace,
+  onSaveTravelRecord,
+  onClose,
+}: {
+  previewState: MapPreviewState;
+  currentPosition: GeoPosition | null;
+  locationLoading: boolean;
+  distanceInfo: {
+    distanceMeters: number;
+    walkingMinutes: number;
+  } | null;
+  isFavorite: (placeId: string) => boolean;
+  onToggleFavorite: (placeId: string) => void;
+  onAddToSchedule: (place: Place, prefill?: Partial<ScheduleInput>) => void;
+  onRequestDelete?: () => void;
+  getPlace?: (placeId: string) => Place | undefined;
+  onSaveTravelRecord?: () => void;
+  onClose: () => void;
+}) {
+  const { location, actionsSource } = previewState;
+  const categoryIcon = placeCategoryIcons[actionsSource.category];
+  const categoryLabel = placeCategoryLabels[actionsSource.category];
 
   const actionButtons = (
     <PlaceActionButtons
@@ -278,19 +424,14 @@ export default function PlaceActionSheet({
       isFavorite={isFavorite}
       onToggleFavorite={onToggleFavorite}
       onAddToSchedule={onAddToSchedule}
-      onOpenTravelRecord={
-        onSaveTravelRecord ? () => setIsRecordOpen(true) : undefined
-      }
-      onRequestDelete={
-        canDelete ? () => setIsDeleteConfirmOpen(true) : undefined
-      }
+      onOpenTravelRecord={onSaveTravelRecord}
+      onRequestDelete={onRequestDelete}
       getPlace={getPlace}
       onClose={onClose}
     />
   );
 
   return (
-    <>
     <OverlayLayer
       onClose={onClose}
       closeLabel="장소 닫기"
@@ -298,8 +439,6 @@ export default function PlaceActionSheet({
       panelClassName="bg-card p-5 shadow-xl transition-shadow duration-200"
     >
       <div role="dialog" aria-labelledby="place-action-sheet-title">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border sm:hidden" />
-
         <div className="flex items-start gap-3">
           <span className="text-2xl" aria-hidden>
             {categoryIcon}
@@ -376,51 +515,5 @@ export default function PlaceActionSheet({
         </Button>
       </div>
     </OverlayLayer>
-
-    {isDeleteConfirmOpen && (
-      <OverlayLayer onClose={() => setIsDeleteConfirmOpen(false)}>
-        <Card
-          padding="lg"
-          className="w-full max-w-sm animate-slide-up bg-card shadow-xl"
-          role="dialog"
-          aria-labelledby="place-delete-confirm-title"
-        >
-          <Text
-            variant="title-sm"
-            as="h2"
-            id="place-delete-confirm-title"
-          >
-            이 장소를 삭제하시겠습니까?
-          </Text>
-          <div className="mt-5 flex gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1"
-            >
-              취소
-            </Button>
-            <Button
-              type="button"
-              onClick={handleConfirmDelete}
-              className="flex-1 bg-danger text-white hover:bg-danger/90 active:bg-danger/95"
-            >
-              삭제
-            </Button>
-          </div>
-        </Card>
-      </OverlayLayer>
-    )}
-
-    {onSaveTravelRecord && (
-      <PlaceTravelRecordSheet
-        isOpen={isRecordOpen}
-        place={livePlace}
-        onClose={() => setIsRecordOpen(false)}
-        onSave={handleSaveRecord}
-      />
-    )}
-    </>
   );
 }
