@@ -105,54 +105,65 @@ export default function TripInfoCard({
       <button
         type="button"
         onClick={toggleExpanded}
-        className="flex min-h-12 w-full items-center gap-1.5 px-2.5 py-3.5 text-left transition-colors hover:bg-background/80 sm:min-h-0 sm:py-2"
+        className="flex w-full items-start gap-2 px-3 py-[1.125rem] text-left transition-colors hover:bg-background/80 sm:gap-2.5 sm:px-3.5 sm:py-3.5"
         aria-expanded={expanded}
         aria-label={expanded ? "여행정보 접기" : "여행정보 펼치기"}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
-          <CountryFlag
-            code={trip.countryCode}
-            className="shrink-0 text-base leading-none sm:text-sm"
-            label={trip.country}
-          />
-          <span className="min-w-0 truncate text-[12.5px] font-semibold leading-tight text-foreground sm:text-[11px]">
-            <span>{trip.city}</span>
-            <span className="font-normal text-muted"> | </span>
-            <span className="font-medium">
+        <div className="min-w-0 flex-1 space-y-1.5 sm:space-y-1.5">
+          {/* 1행: 국기 + 여행지 | 여행기간 */}
+          <div className="flex min-w-0 items-baseline justify-between gap-2.5">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <CountryFlag
+                code={trip.countryCode}
+                className="shrink-0 text-[1.125rem] leading-none sm:text-base"
+                label={trip.country}
+              />
+              <span className="min-w-0 truncate text-[15px] font-bold leading-snug tracking-tight text-foreground sm:text-[14px]">
+                {trip.city}
+              </span>
+            </div>
+            <span className="shrink-0 text-[12px] font-medium leading-snug text-muted sm:text-[12px]">
               <span aria-hidden>📅 </span>
               {trip.startDate} ~ {trip.endDate}
             </span>
-            <span className="font-normal text-muted"> | </span>
-            <span className="font-medium">
-              <span aria-hidden>{statusIcon} </span>
-              {statusLabel}
+          </div>
+
+          {/* 2행: 여행상태 | 여행일수 */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] font-medium leading-snug text-foreground sm:text-[12px]">
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden>{statusIcon}</span>
+              <span>{statusLabel}</span>
             </span>
-            <span className="font-normal text-muted"> | </span>
-            <span className="font-medium">{trip.duration}</span>
+            <span className="text-muted" aria-hidden>
+              ·
+            </span>
+            <span>{trip.duration}</span>
             {showDepartingToday && (
               <>
-                <span className="font-normal text-muted"> | </span>
+                <span className="text-muted" aria-hidden>
+                  ·
+                </span>
                 <span className="font-medium text-warning">🛫 오늘 출발</span>
               </>
             )}
-          </span>
+          </div>
         </div>
 
         {expanded ? (
           <ChevronUp
-            className="h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5"
+            className="mt-0.5 h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5"
             aria-hidden
           />
         ) : (
           <ChevronDown
-            className="h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5"
+            className="mt-0.5 h-4 w-4 shrink-0 text-muted sm:h-3.5 sm:w-3.5"
             aria-hidden
           />
         )}
       </button>
 
       {expanded && (
-        <div className="space-y-2 border-t border-border px-2.5 pb-3 pt-2.5 animate-fade-in sm:pb-2 sm:pt-2">
+        <div className="space-y-2 border-t border-border px-3 pb-3.5 pt-3 animate-fade-in sm:px-3.5 sm:pb-3 sm:pt-2.5">
           <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
             <CountryFlag
               code={trip.countryCode}
