@@ -59,6 +59,11 @@ export interface Place {
   memo?: string;
   /** 방문 상태 (없으면 방문안함) */
   visit?: PlaceVisit;
+  /**
+   * TripFlow 목록 숨김 (My Maps/KML 장소 삭제 시)
+   * Google My Maps 원본은 유지하고, 앱에서만 숨긴다.
+   */
+  hidden?: boolean;
 }
 
 export interface PlaceInput {

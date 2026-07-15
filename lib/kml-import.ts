@@ -46,6 +46,8 @@ function applyPlacemarkToExistingKmlPlace(
     longitude: fresh.longitude,
     mapsLink: fresh.mapsLink,
     memo: existing.memo?.trim() ? existing.memo : fresh.memo,
+    // 사용자가 TripFlow에서 숨긴 My Maps 장소는 재가져오기 후에도 숨김 유지
+    hidden: existing.hidden,
   };
 }
 

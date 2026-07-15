@@ -35,11 +35,13 @@ function normalizePlace(raw: Place): Place {
 
   const source: PlaceSource = raw.source ?? inferPlaceSource(place);
   const visit = normalizePlaceVisit(raw.visit);
+  const hidden = raw.hidden === true ? true : undefined;
 
   return {
     ...place,
     source,
     visit,
+    hidden,
   };
 }
 

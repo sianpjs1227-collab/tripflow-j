@@ -29,7 +29,7 @@ import { scheduleItemToPlace } from "@/lib/schedule-maps";
 import { usePlaceActionSheet } from "@/hooks/usePlaceActionSheet";
 import { usePlaceFavorites } from "@/hooks/usePlaceFavorites";
 import PlaceActionSheet from "@/components/map/PlaceActionSheet";
-import { getPlaceById, createPlace } from "@/lib/place-utils";
+import { getPlaceById, createPlace, getVisiblePlaces, removeOrHidePlace } from "@/lib/place-utils";
 import { applyTravelRecord } from "@/lib/place-visit";
 import { formatExpenseAmount } from "@/lib/expense-utils";
 import { tripHasExchangeRate } from "@/lib/currency-utils";
@@ -51,7 +51,8 @@ interface ScheduleTabProps {
 
 function ScheduleTabContent({ trip }: ScheduleTabProps) {
   const { tripId, data, updateData } = useTripDetail();
-  const { favoriteIds, isFavorite, toggleFavorite } = usePlaceFavorites(tripId);
+  const { favoriteIds, isFavorite, toggleFavorite, removeFavorite } =
+    usePlaceFavorites(tripId);
   const { previewState, openPlace, closePlace } = usePlaceActionSheet();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
@@ -168,6 +169,19 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
       ),
     }));
   };
+
+  const handleDeletePlace = (place: Place) => {
+    updateData((prev) => ({
+      ...prev,
+      places: removeOrHidePlace(prev.places, place.id),
+    }));
+    removeFavorite(place.id);
+  };
+
+  const visiblePlaces = useMemo(
+    () => getVisiblePlaces(data.places),
+    [data.places],
+  );
 
   const getPlaceFromData = (placeId: string) =>
     data.places.find((place) => place.id === placeId);
@@ -480,7 +494,7 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
                     ) : (
                       <DayGapSection
                         dayItems={selectedDay.items}
-                        places={data.places}
+                        places={visiblePlaces}
                         onOpenPlace={handleOpenPlaceFromGap}
                         className="mt-0"
                       />
@@ -496,7 +510,7 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
       <ScheduleModal
         isOpen={isModalOpen}
         editingItem={editingItem}
-        places={data.places}
+        places={visiblePlaces}
         defaultDate={selectedDate}
         initialForm={gapPrefill ?? undefined}
         onClose={closeModal}
@@ -512,6 +526,7 @@ function ScheduleTabContent({ trip }: ScheduleTabProps) {
         onToggleFavorite={toggleFavorite}
         getPlace={getPlaceFromData}
         onSaveTravelRecord={handleSaveTravelRecord}
+        onDeletePlace={handleDeletePlace}
         onAddToSchedule={handleAddToScheduleFromSheet}
       />
     </div>

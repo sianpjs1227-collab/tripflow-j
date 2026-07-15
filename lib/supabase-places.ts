@@ -34,6 +34,7 @@ function placeToSupabaseInsert(
     visited,
     visited_at:
       visited && place.visit?.visitedAt ? place.visit.visitedAt : null,
+    is_hidden: place.hidden === true,
   };
 }
 
@@ -50,6 +51,7 @@ function placeToSupabaseUpdate(place: Place): SupabasePlaceUpdate {
     visited,
     visited_at:
       visited && place.visit?.visitedAt ? place.visit.visitedAt : null,
+    is_hidden: place.hidden === true,
     updated_at: new Date().toISOString(),
   };
 }
@@ -66,7 +68,8 @@ function supabaseFieldsEqual(a: Place, b: Place): boolean {
     a.category === b.category &&
     (a.memo ?? null) === (b.memo ?? null) &&
     visitedA === visitedB &&
-    (a.visit?.visitedAt ?? null) === (b.visit?.visitedAt ?? null)
+    (a.visit?.visitedAt ?? null) === (b.visit?.visitedAt ?? null) &&
+    (a.hidden === true) === (b.hidden === true)
   );
 }
 
@@ -109,6 +112,10 @@ export function supabaseRowToPlace(row: SupabasePlaceRow): Place {
       status: "visited",
       visitedAt: row.visited_at,
     };
+  }
+
+  if (row.is_hidden) {
+    place.hidden = true;
   }
 
   place.source = inferPlaceSource(place);

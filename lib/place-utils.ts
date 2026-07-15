@@ -66,6 +66,32 @@ export function isKmlPlace(place: Place): boolean {
   return inferPlaceSource(place) === "KML";
 }
 
+/** 목록·검색·개수에 표시할 장소 (숨김 제외) */
+export function isPlaceVisible(place: Place): boolean {
+  return place.hidden !== true;
+}
+
+export function getVisiblePlaces(places: Place[]): Place[] {
+  return places.filter(isPlaceVisible);
+}
+
+/**
+ * 장소 삭제 — KML(My Maps)은 숨김, MANUAL은 완전 삭제.
+ * Google My Maps 원본은 건드리지 않는다.
+ */
+export function removeOrHidePlace(places: Place[], placeId: string): Place[] {
+  const target = places.find((place) => place.id === placeId);
+  if (!target) return places;
+
+  if (isKmlPlace(target)) {
+    return places.map((place) =>
+      place.id === placeId ? { ...place, hidden: true } : place,
+    );
+  }
+
+  return places.filter((place) => place.id !== placeId);
+}
+
 export function generatePlaceId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();

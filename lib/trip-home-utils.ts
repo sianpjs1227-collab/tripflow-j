@@ -1,5 +1,6 @@
 import type { Trip, TripStatus } from "@/types/trip";
 import { formatExpenseTotalDisplay } from "@/lib/expense-utils";
+import { getVisiblePlaces } from "@/lib/place-utils";
 import { loadTripDetailData } from "@/lib/trip-detail-storage";
 import { displayDateToIso } from "@/lib/trip-utils";
 import {
@@ -244,7 +245,7 @@ export function getTripHomeStats(trip: Trip): TripHomeStats {
 
   return {
     scheduleCount: detail.events.length,
-    placeCount: detail.places.length,
+    placeCount: getVisiblePlaces(detail.places).length,
     expensePrimary: expenseDisplay.primary,
     expenseSecondary: expenseDisplay.secondary,
     preparationRate,

@@ -44,6 +44,7 @@ interface PlaceActionSheetProps {
   isFavorite: (placeId: string) => boolean;
   onToggleFavorite: (placeId: string) => void;
   onAddToSchedule: (place: Place, prefill?: Partial<ScheduleInput>) => void;
+  onDeletePlace?: (place: Place) => void;
   getPlace?: (placeId: string) => Place | undefined;
   onSaveTravelRecord?: (placeId: string, input: PlaceTravelRecordInput) => void;
   knownCurrentPosition?: GeoPosition | null;
@@ -87,6 +88,7 @@ function PlaceActionButtons({
   onToggleFavorite,
   onAddToSchedule,
   onOpenTravelRecord,
+  onRequestDelete,
   getPlace,
   onClose,
 }: {
@@ -96,6 +98,7 @@ function PlaceActionButtons({
   onToggleFavorite: (placeId: string) => void;
   onAddToSchedule: (place: Place, prefill?: Partial<ScheduleInput>) => void;
   onOpenTravelRecord?: () => void;
+  onRequestDelete?: () => void;
   getPlace?: (placeId: string) => Place | undefined;
   onClose: () => void;
 }) {
@@ -176,6 +179,17 @@ function PlaceActionButtons({
             />
             즐겨찾기
           </Button>
+          {onRequestDelete && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onRequestDelete}
+              className="w-full border-danger/30 text-danger"
+            >
+              <span aria-hidden>🗑</span>
+              장소 삭제
+            </Button>
+          )}
         </>
       )}
       {hasGoogleMaps && (
@@ -192,13 +206,14 @@ function PlaceActionButtons({
   );
 }
 
-/** 장소 액션 Bottom Sheet — 미니맵 + 지도·길찾기·일정·즐겨찾기 */
+/** 장소 액션 Bottom Sheet — 미니맵 + 지도·길찾기·일정·즐겨찾기·삭제 */
 export default function PlaceActionSheet({
   previewState,
   onClose,
   isFavorite,
   onToggleFavorite,
   onAddToSchedule,
+  onDeletePlace,
   getPlace,
   onSaveTravelRecord,
   knownCurrentPosition,
@@ -208,11 +223,13 @@ export default function PlaceActionSheet({
   );
   const [locationLoading, setLocationLoading] = useState(false);
   const [isRecordOpen, setIsRecordOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const distanceInfo = useDistanceInfo(previewState, currentPosition);
 
   useEffect(() => {
     if (!previewState) {
       setIsRecordOpen(false);
+      setIsDeleteConfirmOpen(false);
     }
   }, [previewState]);
 
@@ -240,11 +257,37 @@ export default function PlaceActionSheet({
   const livePlace = getPlace?.(actionsSource.id) ?? actionsSource;
   const categoryIcon = placeCategoryIcons[actionsSource.category];
   const categoryLabel = placeCategoryLabels[actionsSource.category];
+  const canDelete =
+    Boolean(onDeletePlace) && previewStateHasPlaceActions(previewState);
 
   const handleSaveRecord = (placeId: string, input: PlaceTravelRecordInput) => {
     onSaveTravelRecord?.(placeId, input);
     setIsRecordOpen(false);
   };
+
+  const handleConfirmDelete = () => {
+    onDeletePlace?.(livePlace);
+    setIsDeleteConfirmOpen(false);
+    onClose();
+  };
+
+  const actionButtons = (
+    <PlaceActionButtons
+      previewState={previewState}
+      currentPosition={currentPosition}
+      isFavorite={isFavorite}
+      onToggleFavorite={onToggleFavorite}
+      onAddToSchedule={onAddToSchedule}
+      onOpenTravelRecord={
+        onSaveTravelRecord ? () => setIsRecordOpen(true) : undefined
+      }
+      onRequestDelete={
+        canDelete ? () => setIsDeleteConfirmOpen(true) : undefined
+      }
+      getPlace={getPlace}
+      onClose={onClose}
+    />
+  );
 
   return (
     <>
@@ -306,18 +349,7 @@ export default function PlaceActionSheet({
                 currentPosition={currentPosition}
                 locationLoading={locationLoading}
               />
-              <PlaceActionButtons
-                previewState={previewState}
-                currentPosition={currentPosition}
-                isFavorite={isFavorite}
-                onToggleFavorite={onToggleFavorite}
-                onAddToSchedule={onAddToSchedule}
-                onOpenTravelRecord={
-                  onSaveTravelRecord ? () => setIsRecordOpen(true) : undefined
-                }
-                getPlace={getPlace}
-                onClose={onClose}
-              />
+              {actionButtons}
             </>
           ) : (
             <>
@@ -329,18 +361,7 @@ export default function PlaceActionSheet({
               {locationLoading && (
                 <Text variant="muted">현재 위치 확인 중…</Text>
               )}
-              <PlaceActionButtons
-                previewState={previewState}
-                currentPosition={currentPosition}
-                isFavorite={isFavorite}
-                onToggleFavorite={onToggleFavorite}
-                onAddToSchedule={onAddToSchedule}
-                onOpenTravelRecord={
-                  onSaveTravelRecord ? () => setIsRecordOpen(true) : undefined
-                }
-                getPlace={getPlace}
-                onClose={onClose}
-              />
+              {actionButtons}
             </>
           )}
         </div>
@@ -355,6 +376,42 @@ export default function PlaceActionSheet({
         </Button>
       </div>
     </OverlayLayer>
+
+    {isDeleteConfirmOpen && (
+      <OverlayLayer onClose={() => setIsDeleteConfirmOpen(false)}>
+        <Card
+          padding="lg"
+          className="w-full max-w-sm animate-slide-up bg-card shadow-xl"
+          role="dialog"
+          aria-labelledby="place-delete-confirm-title"
+        >
+          <Text
+            variant="title-sm"
+            as="h2"
+            id="place-delete-confirm-title"
+          >
+            이 장소를 삭제하시겠습니까?
+          </Text>
+          <div className="mt-5 flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="flex-1"
+            >
+              취소
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmDelete}
+              className="flex-1 bg-danger text-white hover:bg-danger/90 active:bg-danger/95"
+            >
+              삭제
+            </Button>
+          </div>
+        </Card>
+      </OverlayLayer>
+    )}
 
     {onSaveTravelRecord && (
       <PlaceTravelRecordSheet

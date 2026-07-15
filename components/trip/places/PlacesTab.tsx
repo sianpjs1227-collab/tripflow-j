@@ -10,7 +10,9 @@ import {
   createPlace,
   filterPlacesByActiveFilter,
   filterPlacesByName,
+  getVisiblePlaces,
   groupPlacesByCategory,
+  removeOrHidePlace,
   updatePlace,
   type PlaceListFilter,
 } from "@/lib/place-utils";
@@ -36,7 +38,7 @@ import NearbyPlacesResults from "./NearbyPlacesResults";
  */
 export default function PlacesTab() {
   const { tripId, data, updateData } = useTripDetail();
-  const { favoriteIds, isFavorite, toggleFavorite } =
+  const { favoriteIds, isFavorite, toggleFavorite, removeFavorite } =
     usePlaceFavorites(tripId);
   const { previewState, openPlace, closePlace } = usePlaceActionSheet();
 
@@ -52,25 +54,30 @@ export default function PlacesTab() {
   const [activeFilter, setActiveFilter] = useState<PlaceListFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  const visiblePlaces = useMemo(
+    () => getVisiblePlaces(data.places),
+    [data.places],
+  );
+
   const totalFavoriteCount = useMemo(
-    () => data.places.filter((place) => favoriteIds.has(place.id)).length,
-    [data.places, favoriteIds],
+    () => visiblePlaces.filter((place) => favoriteIds.has(place.id)).length,
+    [visiblePlaces, favoriteIds],
   );
 
   const visitedCount = useMemo(
-    () => data.places.filter((place) => isPlaceVisited(place)).length,
-    [data.places],
+    () => visiblePlaces.filter((place) => isPlaceVisited(place)).length,
+    [visiblePlaces],
   );
 
   const notVisitedCount = useMemo(
-    () => data.places.filter((place) => !isPlaceVisited(place)).length,
-    [data.places],
+    () => visiblePlaces.filter((place) => !isPlaceVisited(place)).length,
+    [visiblePlaces],
   );
 
   const placesInCategory = useMemo(
     () =>
-      filterPlacesByActiveFilter(data.places, activeFilter, favoriteIds),
-    [data.places, activeFilter, favoriteIds],
+      filterPlacesByActiveFilter(visiblePlaces, activeFilter, favoriteIds),
+    [visiblePlaces, activeFilter, favoriteIds],
   );
 
   const searchedPlaces = useMemo(
@@ -99,6 +106,14 @@ export default function PlacesTab() {
         place.id === placeId ? applyTravelRecord(place, input) : place,
       ),
     }));
+  };
+
+  const handleDeletePlace = (place: Place) => {
+    updateData((prev) => ({
+      ...prev,
+      places: removeOrHidePlace(prev.places, place.id),
+    }));
+    removeFavorite(place.id);
   };
 
   const handleOpenNearby = (position: GeoPosition) => {
@@ -194,7 +209,7 @@ export default function PlacesTab() {
             전체 장소
           </Button>
 
-          {data.places.length > 0 && (
+          {visiblePlaces.length > 0 && (
             <PlaceCategoryFilter
               activeFilter={activeFilter}
               favoriteCount={totalFavoriteCount}
@@ -227,7 +242,7 @@ export default function PlacesTab() {
             </Button>
           </div>
 
-          {data.places.length === 0 ? (
+          {visiblePlaces.length === 0 ? (
             <Text variant="muted" className="py-4 text-center text-[12px]">
               아직 저장된 장소가 없습니다.
             </Text>
@@ -305,6 +320,7 @@ export default function PlacesTab() {
         onToggleFavorite={toggleFavorite}
         getPlace={getPlaceById}
         onSaveTravelRecord={handleSaveTravelRecord}
+        onDeletePlace={handleDeletePlace}
         knownCurrentPosition={nearbyPosition}
         onAddToSchedule={(place) => {
           closePlace();

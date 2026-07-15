@@ -76,6 +76,25 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/*
+  iOS Safari / PWA: 입력 포커스 시 자동 확대 방지
+  font-size < 16px 이면 확대되므로 iOS에서만 16px로 고정한다.
+  -webkit-touch-callout 은 iOS Safari 계열에서만 지원 → Android·PC 미영향
+  viewport maximum-scale 변경은 사용하지 않음
+*/
+@supports (-webkit-touch-callout: none) {
+  input:not([type="button"]):not([type="submit"]):not([type="reset"]):not(
+      [type="checkbox"]
+    ):not([type="radio"]):not([type="file"]):not([type="image"]):not(
+      [type="hidden"]
+    ):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+
 .scroll-margin-sticky {
   scroll-margin-top: var(--sticky-stack-total);
 }
