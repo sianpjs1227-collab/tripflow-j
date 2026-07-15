@@ -62,10 +62,104 @@ export async function insertSupabaseItinerary(
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
 
-  const { data, error } = await client.from("itineraries").insert(row).select();
+  const logInsertResult = (
+    label: string,
+    payload: SupabaseItineraryInsert,
+    data: unknown,
+    error: { message?: string; code?: string; details?: string; hint?: string } | null,
+    status?: number,
+  ) => {
+    console.log(`[Supabase Query] ${label}`, {
+      trip_id: payload.trip_id,
+      id: payload.id,
+      start_time: payload.start_time,
+      title: payload.title,
+      success: !error,
+      error: error
+        ? {
+            message: error.message ?? null,
+            code: error.code ?? null,
+            details: error.details ?? null,
+            hint: error.hint ?? null,
+          }
+        : null,
+      status: status ?? null,
+      returnedIds: Array.isArray(data)
+        ? data.map((row) => (row as { id?: string }).id)
+        : null,
+    });
+    logSupabaseQueryResult(label, { row: payload, data }, error);
+  };
 
-  logSupabaseQueryResult("itineraries.insert", { row, data }, error);
+  const isStartTimeNotNullViolation = (
+    error: { message?: string; code?: string } | null,
+  ): boolean => {
+    if (!error) return false;
+    if (error.code === "23502") return true;
+    const message = error.message ?? "";
+    return /start_time/i.test(message) && /null/i.test(message);
+  };
+
+  let { data, error, status } = await client
+    .from("itineraries")
+    .insert(row)
+    .select();
+
+  logInsertResult("itineraries.insert", row, data, error, status);
+
+  // start_time NOT NULL 인 구 DB 호환: null → '' 로 1회 재시도
+  if (row.start_time === null && isStartTimeNotNullViolation(error)) {
+    const fallbackRow: SupabaseItineraryInsert = {
+      ...row,
+      start_time: "",
+    };
+    console.warn(
+      "[Supabase Query] itineraries.insert.retry_empty_start_time",
+      {
+        id: row.id,
+        trip_id: row.trip_id,
+        reason: "start_time NOT NULL constraint (23502)",
+      },
+    );
+
+    ({ data, error, status } = await client
+      .from("itineraries")
+      .insert(fallbackRow)
+      .select());
+
+    logInsertResult(
+      "itineraries.insert.retry",
+      fallbackRow,
+      data,
+      error,
+      status,
+    );
+  }
+
   if (error) throw error;
+
+  // insert 직후 동일 trip 에서 row 존재 여부 확인
+  const { data: verifyRows, error: verifyError, status: verifyStatus } =
+    await client
+      .from("itineraries")
+      .select("id, trip_id, start_time, title")
+      .eq("trip_id", row.trip_id)
+      .eq("id", row.id);
+
+  console.log("[Supabase Query] itineraries.insert.verify_select", {
+    trip_id: row.trip_id,
+    id: row.id,
+    found: Array.isArray(verifyRows) && verifyRows.length > 0,
+    rows: verifyRows,
+    success: !verifyError,
+    error: verifyError
+      ? {
+          message: verifyError.message ?? null,
+          code: verifyError.code ?? null,
+        }
+      : null,
+    status: verifyStatus ?? null,
+  });
 }
 
 /** 일정 수정 */
@@ -77,12 +171,40 @@ export async function updateSupabaseItinerary(
   if (!client) throw new Error("Supabase client unavailable");
   const updateRow = itineraryInsertToUpdate(row);
 
-  const { error } = await client
+  let { error, status } = await client
     .from("itineraries")
     .update(updateRow)
     .eq("id", id);
 
-  logSupabaseQueryResult("itineraries.update", { itineraryId: id, row: updateRow }, error);
+  logSupabaseQueryResult(
+    "itineraries.update",
+    { itineraryId: id, row: updateRow, status },
+    error,
+  );
+
+  if (
+    error &&
+    updateRow.start_time === null &&
+    (error.code === "23502" ||
+      (/start_time/i.test(error.message ?? "") &&
+        /null/i.test(error.message ?? "")))
+  ) {
+    const fallbackUpdate = { ...updateRow, start_time: "" };
+    console.warn(
+      "[Supabase Query] itineraries.update.retry_empty_start_time",
+      { id, reason: "start_time NOT NULL constraint (23502)" },
+    );
+    ({ error, status } = await client
+      .from("itineraries")
+      .update(fallbackUpdate)
+      .eq("id", id));
+    logSupabaseQueryResult(
+      "itineraries.update.retry",
+      { itineraryId: id, row: fallbackUpdate, status },
+      error,
+    );
+  }
+
   if (error) throw error;
 }
 
@@ -172,7 +294,27 @@ export async function migrateLocalItinerariesToSupabase(
     validPlaceIds,
   ).values()];
 
-  const { data, error } = await client.from("itineraries").insert(rows).select();
+  let { data, error } = await client.from("itineraries").insert(rows).select();
+
+  if (
+    error &&
+    (error.code === "23502" ||
+      (/start_time/i.test(error.message ?? "") &&
+        /null/i.test(error.message ?? ""))) &&
+    rows.some((row) => row.start_time === null)
+  ) {
+    const fallbackRows = rows.map((row) =>
+      row.start_time === null ? { ...row, start_time: "" } : row,
+    );
+    console.warn(
+      "[Supabase Query] itineraries.migrate.retry_empty_start_time",
+      { tripId, count: fallbackRows.length },
+    );
+    ({ data, error } = await client
+      .from("itineraries")
+      .insert(fallbackRows)
+      .select());
+  }
 
   logSupabaseQueryResult("itineraries.migrate", { tripId, tripDates, rows, data }, error);
   if (error) throw error;
