@@ -23,6 +23,11 @@ import {
   syncSupabaseItinerariesDiff,
 } from "@/lib/supabase-itineraries";
 import {
+  getLocalOnlyEvents,
+  mergeRemoteAndLocalEvents,
+} from "@/lib/itinerary-merge";
+import { prepareItinerariesForSupabaseMigration } from "@/lib/itinerary-migration";
+import {
   fetchSupabaseExpensesByTripId,
   migrateLocalExpensesToSupabase,
   syncSupabaseExpensesDiff,
@@ -158,13 +163,15 @@ export function TripDetailProvider({
           await syncSupabaseMemosDiff(tripId, prev.notes, next.notes);
         }
       } catch (error) {
+        // insert/sync 실패 시 Context를 localStorage로 덮어쓰지 않음.
+        // 이미 setData된 낙관적 일정을 유지하고 write-through 저장에 맡긴다.
         logContextError("[TripFlow Detail] sync error", error);
-        const msg =
-          error instanceof Error ? error.message : "Supabase 상세 데이터 동기화 실패";
-        fallbackToLocal(msg);
+        console.error(
+          "[TripFlow Detail] sync failed — keeping in-memory schedule data",
+        );
       }
     },
-    [tripId, fallbackToLocal, logContextError, resolveTripDates],
+    [tripId, logContextError, resolveTripDates],
   );
 
   useEffect(() => {
@@ -242,14 +249,78 @@ export function TripDetailProvider({
           tripDates,
         );
         const localEvents = detailData.events;
+        let mergedEvents: Event[];
 
         if (remoteEvents.length === 0 && localEvents.length > 0) {
+          // remote 비어 있을 때만 전체 migrate — 성공 시 local은 이미 remote에 반영됨
           remoteEvents = await migrateLocalItinerariesToSupabase(
             tripId,
             localEvents,
             tripDates,
             remotePlaces,
           );
+          mergedEvents = remoteEvents;
+        } else {
+          // remote가 있어도 local-only(pending)는 유지
+          mergedEvents = mergeRemoteAndLocalEvents(remoteEvents, localEvents);
+          const pendingLocalEvents = getLocalOnlyEvents(
+            remoteEvents,
+            localEvents,
+          );
+
+          if (pendingLocalEvents.length > 0) {
+            console.log("[Supabase Query] itineraries.merge_pending", {
+              tripId,
+              remoteCount: remoteEvents.length,
+              pendingCount: pendingLocalEvents.length,
+              pendingIds: pendingLocalEvents.map((event) => event.id),
+            });
+
+            const preparedPending =
+              prepareItinerariesForSupabaseMigration(pendingLocalEvents);
+            const preparedPendingByOldId = new Map(
+              pendingLocalEvents.map((event, index) => [
+                event.id,
+                preparedPending[index],
+              ]),
+            );
+
+            // pending id 가 legacy 면 merge 결과에 uuid 반영
+            if (
+              preparedPending.some(
+                (event, index) => event.id !== pendingLocalEvents[index].id,
+              )
+            ) {
+              mergedEvents = mergeRemoteAndLocalEvents(
+                remoteEvents,
+                localEvents.map(
+                  (event) => preparedPendingByOldId.get(event.id) ?? event,
+                ),
+              );
+            }
+
+            try {
+              await syncSupabaseItinerariesDiff(
+                tripId,
+                tripDates,
+                remoteEvents,
+                mergeRemoteAndLocalEvents(remoteEvents, preparedPending),
+                remotePlaces,
+              );
+              // insert 성공 후에만 pending 제거 (remote 재조회로 확정)
+              remoteEvents = await fetchSupabaseItinerariesByTripId(
+                tripId,
+                tripDates,
+              );
+              mergedEvents = remoteEvents;
+            } catch (pendingError) {
+              logContextError(
+                "[TripFlow Detail] pending itineraries sync error",
+                pendingError,
+              );
+              // insert 실패 시 mergedEvents(local pending 포함) 유지
+            }
+          }
         }
 
         let remoteExpenses = await fetchSupabaseExpensesByTripId(tripId);
@@ -259,6 +330,7 @@ export function TripDetailProvider({
           remoteExpenses = await migrateLocalExpensesToSupabase(
             tripId,
             localExpenses,
+            // 지출 마이그레이션은 remote 일정 id 기준으로 연결
             remoteEvents,
           );
         }
@@ -285,7 +357,7 @@ export function TripDetailProvider({
           setData({
             ...detailData,
             places: remotePlaces,
-            events: remoteEvents,
+            events: mergedEvents,
             expenses: remoteExpenses,
             checklist: remoteChecklists,
             notes: remoteMemos,
@@ -315,6 +387,7 @@ export function TripDetailProvider({
     authMode,
     user,
     fallbackToLocal,
+    logContextError,
     resolveTripDates,
   ]);
 
@@ -335,13 +408,15 @@ export function TripDetailProvider({
           prev.checklist !== next.checklist ||
           prev.notes !== next.notes
         ) {
+          // insert 실패 시에도 재접속에서 복구되도록 sync 전에 local 보존
+          saveTripDetailData(tripId, next);
           void syncDetailToSupabase(prev, next);
         }
 
         return next;
       });
     },
-    [syncDetailToSupabase],
+    [syncDetailToSupabase, tripId],
   );
 
   const getPlace = useCallback(
