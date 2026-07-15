@@ -50,6 +50,25 @@ function resolvePlaceId(
   return validPlaceIds.has(placeId) ? placeId : null;
 }
 
+/**
+ * Event.time → itineraries.start_time
+ * - 시간 지정: "HH:mm"
+ * - 시간 미정: "" (NOT NULL DB에서도 insert 가능; null은 23502 유발)
+ *   select 시 fromSupabaseStartTime 으로 Event.time = null 복원
+ */
+export function toSupabaseStartTime(
+  time: string | null | undefined,
+): string {
+  return time?.trim() || "";
+}
+
+/** DB start_time → Event.time (null/빈문자 모두 시간 미정) */
+export function fromSupabaseStartTime(
+  startTime: string | null | undefined,
+): string | null {
+  return startTime?.trim() || null;
+}
+
 /** Event → Supabase itineraries 행 */
 export function eventToItineraryInsert(
   event: Event,
@@ -58,15 +77,16 @@ export function eventToItineraryInsert(
   sortOrder: number,
   validPlaceIds: ReadonlySet<string>,
 ): SupabaseItineraryInsert {
+  const startTime = toSupabaseStartTime(event.time);
+
   return {
     id: event.id,
     trip_id: tripId,
     place_id: resolvePlaceId(event.placeId, validPlaceIds),
     day_number: resolveEventDayNumber(event, tripDates),
-    start_time: event.time?.trim() || null,
-    end_time: event.time?.trim()
-      ? event.endTime?.trim() || null
-      : null,
+    // 시간 미정은 "" — null 금지(구스키마 NOT NULL 대응)
+    start_time: startTime,
+    end_time: startTime ? event.endTime?.trim() || null : null,
     title: event.title,
     memo: event.memo ?? null,
     sort_order: sortOrder,
@@ -81,7 +101,7 @@ export function itineraryRowToEvent(
   return {
     id: row.id,
     date: resolveDayNumberToDate(row.day_number, tripDates),
-    time: row.start_time?.trim() || null,
+    time: fromSupabaseStartTime(row.start_time),
     endTime: row.end_time?.trim() || undefined,
     title: row.title,
     placeId: row.place_id ?? "",
@@ -122,7 +142,7 @@ export function itineraryPayloadsEqual(
     a.trip_id === b.trip_id &&
     a.place_id === b.place_id &&
     a.day_number === b.day_number &&
-    a.start_time === b.start_time &&
+    toSupabaseStartTime(a.start_time) === toSupabaseStartTime(b.start_time) &&
     a.end_time === b.end_time &&
     a.title === b.title &&
     a.memo === b.memo &&
