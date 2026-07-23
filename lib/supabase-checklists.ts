@@ -1,4 +1,9 @@
 import { prepareChecklistsForSupabaseMigration } from "@/lib/checklist-migration";
+import {
+  CHECKLIST_CATEGORY_ORDER,
+  DEFAULT_CHECKLIST_ENTRIES,
+  type ChecklistCategory,
+} from "@/lib/default-checklist";
 import { getSupabaseClient, logSupabaseQueryResult } from "@/lib/supabase";
 import type { ChecklistItem } from "@/types/checklist";
 import type {
@@ -6,6 +11,41 @@ import type {
   SupabaseChecklistRow,
   SupabaseChecklistUpdate,
 } from "@/types/supabase-checklist";
+
+/** DB/앱 category → 알려진 기본 그룹만 유지, 그 외·직접 추가는 null */
+function toSupabaseCategory(
+  category: ChecklistItem["category"],
+): ChecklistCategory | null {
+  if (!category) return null;
+  if (
+    (CHECKLIST_CATEGORY_ORDER as readonly string[]).includes(category)
+  ) {
+    return category;
+  }
+  return null;
+}
+
+/** DB category → 앱 category (없거나 알 수 없으면 undefined → UI에서 직접 추가) */
+function fromSupabaseCategory(
+  category: string | null | undefined,
+): ChecklistCategory | undefined {
+  if (!category) return undefined;
+  if (
+    (CHECKLIST_CATEGORY_ORDER as readonly string[]).includes(category)
+  ) {
+    return category as ChecklistCategory;
+  }
+  return undefined;
+}
+
+/** category 미저장 레거시 행 — 기본 항목 텍스트로 그룹 복구 */
+function inferCategoryFromDefaultText(
+  title: string,
+): ChecklistCategory | undefined {
+  const trimmed = title.trim();
+  return DEFAULT_CHECKLIST_ENTRIES.find((entry) => entry.text === trimmed)
+    ?.category;
+}
 
 function checklistToSupabaseInsert(
   item: ChecklistItem,
@@ -18,6 +58,7 @@ function checklistToSupabaseInsert(
     title: item.text,
     is_completed: item.checked,
     sort_order: sortOrder,
+    category: toSupabaseCategory(item.category),
   };
 }
 
@@ -29,6 +70,7 @@ function checklistToSupabaseUpdate(
     title: item.text,
     is_completed: item.checked,
     sort_order: sortOrder,
+    category: toSupabaseCategory(item.category),
     updated_at: new Date().toISOString(),
   };
 }
@@ -41,7 +83,8 @@ function supabaseFieldsEqual(
     a.trip_id === b.trip_id &&
     a.title === b.title &&
     a.is_completed === b.is_completed &&
-    a.sort_order === b.sort_order
+    a.sort_order === b.sort_order &&
+    a.category === b.category
   );
 }
 
@@ -61,10 +104,14 @@ function buildChecklistPayloadMap(
 export function supabaseRowToChecklistItem(
   row: SupabaseChecklistRow,
 ): ChecklistItem {
+  const category =
+    fromSupabaseCategory(row.category) ??
+    inferCategoryFromDefaultText(row.title);
   return {
     id: row.id,
     text: row.title,
     checked: row.is_completed,
+    ...(category ? { category } : {}),
   };
 }
 

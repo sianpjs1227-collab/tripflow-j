@@ -27,7 +27,11 @@ export default function ChecklistModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    setForm(editingItem ? { text: editingItem.text } : EMPTY_FORM);
+    setForm(
+      editingItem
+        ? { text: editingItem.text, category: editingItem.category }
+        : EMPTY_FORM,
+    );
     setError("");
   }, [isOpen, editingItem]);
 
