@@ -245,6 +245,11 @@ export function TripDetailProvider({
         const localPlaces = localData.places;
         let detailData = localData;
 
+        console.log(
+          `[loadDetail] local=${localPlaces.length} remote=${remotePlaces.length}`,
+          { tripId },
+        );
+
         if (
           remotePlaces.length === 0 &&
           Array.isArray(localPlaces) &&
@@ -444,6 +449,11 @@ export function TripDetailProvider({
 
         if (!cancelled) {
           setDetailStorageMode("supabase");
+          console.log(
+            `[loadDetail] local=${detailData.places.length} remote=${remotePlaces.length}`,
+            { tripId, mergedPlaces: mergedPlaces.length },
+          );
+          console.log(`[setData] places=${mergedPlaces.length}`, { tripId });
           setData({
             ...detailData,
             places: mergedPlaces,
@@ -499,6 +509,10 @@ export function TripDetailProvider({
           prev.checklist !== next.checklist ||
           prev.notes !== next.notes
         ) {
+          console.log(`[updateData] places=${next.places.length}`, {
+            tripId,
+            prevPlaces: prev.places.length,
+          });
           // insert 실패 시에도 재접속에서 복구되도록 sync 전에 local 보존
           saveTripDetailData(tripId, next);
           void syncDetailToSupabase(prev, next);

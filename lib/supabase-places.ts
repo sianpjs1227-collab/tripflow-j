@@ -139,7 +139,9 @@ export async function fetchSupabasePlacesByTripId(
   logSupabaseQueryResult("places.select", { tripId, data }, error);
   if (error) throw error;
 
-  return (data as SupabasePlaceRow[]).map(supabaseRowToPlace);
+  const places = (data as SupabasePlaceRow[]).map(supabaseRowToPlace);
+  console.log(`[fetch] remotePlaces=${places.length}`, { tripId });
+  return places;
 }
 
 /** 장소 생성 */
@@ -189,6 +191,12 @@ export async function syncSupabasePlacesDiff(
   prevPlaces: Place[],
   nextPlaces: Place[],
 ): Promise<void> {
+  console.log("[sync] start", {
+    tripId,
+    prevPlaces: prevPlaces.length,
+    nextPlaces: nextPlaces.length,
+  });
+
   const prevMap = new Map(prevPlaces.map((place) => [place.id, place]));
   const nextMap = new Map(nextPlaces.map((place) => [place.id, place]));
 
@@ -199,6 +207,10 @@ export async function syncSupabasePlacesDiff(
     return !supabaseFieldsEqual(prevMap.get(id)!, nextMap.get(id)!);
   });
 
+  console.log(
+    `[sync] insert=${inserts.length} update=${updates.length} delete=${deletes.length}`,
+    { tripId, deletes, inserts, updates },
+  );
   console.log("[Supabase Query] places.diff", {
     tripId,
     deletes,
@@ -213,6 +225,13 @@ export async function syncSupabasePlacesDiff(
   );
 
   await Promise.all(updates.map((id) => updateSupabasePlace(nextMap.get(id)!)));
+
+  console.log("[sync] done", {
+    tripId,
+    insert: inserts.length,
+    update: updates.length,
+    delete: deletes.length,
+  });
 }
 
 /**

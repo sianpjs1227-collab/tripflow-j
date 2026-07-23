@@ -108,6 +108,7 @@ export function loadTripDetailData(tripId: string): TripDetailData {
 }
 
 export function saveTripDetailData(tripId: string, data: TripDetailData): void {
+  console.log(`[saveTripDetailData] places=${data.places.length}`, { tripId });
   const store = readStore();
   store[tripId] = data;
   writeStore(store);
