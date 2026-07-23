@@ -1,4 +1,8 @@
-import type { KmlImportResult, KmlPlacemark } from "@/types/kml";
+import type {
+  KmlImportResult,
+  KmlPlacemark,
+  KmlSkipDetail,
+} from "@/types/kml";
 import type { Place } from "@/types/place";
 import { coordinatesToMapsLink } from "@/lib/kml-parser";
 import { folderNameToCategory } from "@/lib/kml-folder-map";
@@ -51,57 +55,152 @@ function applyPlacemarkToExistingKmlPlace(
   };
 }
 
+function logKmlImportResult(
+  mode: "merge" | "update",
+  existingCount: number,
+  kmlCount: number,
+  result: KmlImportResult,
+): void {
+  const skippedDetails = result.skippedDetails ?? [];
+  const addedNames = result.addedNames ?? [];
+
+  console.log(`[KML ${mode}] summary`, {
+    existingCount,
+    kmlCount,
+    updatedCount: result.updatedCount ?? 0,
+    addedCount: result.addedCount,
+    skippedCount: result.skippedCount,
+  });
+
+  if (addedNames.length > 0) {
+    console.log(`[KML ${mode}] 신규 추가`);
+    for (const name of addedNames) {
+      console.log(`- ${name}`);
+    }
+  }
+
+  if (skippedDetails.length > 0) {
+    console.log(`[KML ${mode}] Skip`);
+    for (const detail of skippedDetails) {
+      console.log(`- ${detail.name}`);
+      console.log(`reason: ${detail.reason}`);
+    }
+  }
+}
+
 export function mergeKmlPlacemarksIntoPlaces(
   existingPlaces: Place[],
   placemarks: KmlPlacemark[],
 ): KmlImportResult {
-  const existingNames = new Set(
-    existingPlaces.map((p) => p.name.trim()),
+  const kmlNames = new Set(
+    existingPlaces
+      .filter((place) => isKmlPlace(place))
+      .map((place) => place.name.trim())
+      .filter(Boolean),
   );
+  const manualNames = new Set(
+    existingPlaces
+      .filter((place) => !isKmlPlace(place))
+      .map((place) => place.name.trim())
+      .filter(Boolean),
+  );
+  const existingNames = new Set([...kmlNames, ...manualNames]);
 
   const newPlaces: Place[] = [];
+  const addedNames: string[] = [];
+  const skippedDetails: KmlSkipDetail[] = [];
   let skippedCount = 0;
 
   for (const placemark of placemarks) {
     const name = placemark.name.trim();
+    if (!name) {
+      skippedCount += 1;
+      skippedDetails.push({ name: "(empty)", reason: "empty_name" });
+      continue;
+    }
+
     if (existingNames.has(name)) {
       skippedCount += 1;
+      skippedDetails.push({
+        name,
+        reason: kmlNames.has(name) ? "existing_kml" : "existing_manual",
+      });
       continue;
     }
 
     const place = placemarkToPlace(placemark);
     newPlaces.push(place);
     existingNames.add(name);
+    kmlNames.add(name);
+    addedNames.push(name);
   }
 
-  return {
+  const result: KmlImportResult = {
     places: [...existingPlaces, ...newPlaces],
     addedCount: newPlaces.length,
     skippedCount,
+    addedNames,
+    skippedDetails,
   };
+
+  logKmlImportResult("merge", existingPlaces.length, placemarks.length, result);
+  return result;
 }
 
 /**
  * KML 재가져오기 — KML 장소는 최신 데이터로 갱신, MANUAL 장소·연결 데이터 유지
+ *
+ * 신규 추가 규칙:
+ * - 동일 이름의 기존 KML 장소가 있으면 → update
+ * - 없으면 → 항상 add (MANUAL 동명이 있어도 My Maps 신규는 추가)
+ * - 같은 KML 파일 안 동명 반복 → 첫 항목만 반영, 나머지 skip
  */
 export function updateKmlPlacemarksIntoPlaces(
   existingPlaces: Place[],
   placemarks: KmlPlacemark[],
 ): KmlImportResult {
-  const kmlByName = new Map(
+  const kmlByName = new Map<string, Place>();
+  for (const place of existingPlaces) {
+    if (!isKmlPlace(place)) continue;
+    const name = place.name.trim();
+    if (!name || kmlByName.has(name)) continue;
+    kmlByName.set(name, place);
+  }
+
+  const manualNames = new Set(
     existingPlaces
-      .filter((place) => isKmlPlace(place))
-      .map((place) => [place.name.trim(), place]),
+      .filter((place) => !isKmlPlace(place))
+      .map((place) => place.name.trim())
+      .filter(Boolean),
   );
-  const allNames = new Set(existingPlaces.map((place) => place.name.trim()));
 
   const updatesById = new Map<string, Place>();
   const newPlaces: Place[] = [];
+  const addedNames: string[] = [];
+  const skippedDetails: KmlSkipDetail[] = [];
+  const seenInThisFile = new Set<string>();
+
   let addedCount = 0;
   let updatedCount = 0;
+  let skippedCount = 0;
 
   for (const placemark of placemarks) {
     const name = placemark.name.trim();
+
+    if (!name) {
+      skippedCount += 1;
+      skippedDetails.push({ name: "(empty)", reason: "empty_name" });
+      continue;
+    }
+
+    // 같은 KML 파일 내 동명 → 첫 항목만 처리
+    if (seenInThisFile.has(name)) {
+      skippedCount += 1;
+      skippedDetails.push({ name, reason: "duplicate_in_kml" });
+      continue;
+    }
+    seenInThisFile.add(name);
+
     const existingKml = kmlByName.get(name);
 
     if (existingKml) {
@@ -110,11 +209,21 @@ export function updateKmlPlacemarksIntoPlaces(
         applyPlacemarkToExistingKmlPlace(existingKml, placemark),
       );
       updatedCount += 1;
-    } else if (!allNames.has(name)) {
-      const place = placemarkToPlace(placemark);
-      newPlaces.push(place);
-      allNames.add(name);
-      addedCount += 1;
+      continue;
+    }
+
+    // 기존 KML에 없는 이름 → 신규 추가
+    // (이전 버그: allNames에 MANUAL 이름까지 넣어 신규 My Maps 장소를 조용히 버림)
+    const place = placemarkToPlace(placemark);
+    newPlaces.push(place);
+    kmlByName.set(name, place);
+    addedNames.push(name);
+    addedCount += 1;
+
+    if (manualNames.has(name)) {
+      console.log("[KML update] 신규 추가 (MANUAL 동명 존재, KML로 별도 추가)", {
+        name,
+      });
     }
   }
 
@@ -123,11 +232,15 @@ export function updateKmlPlacemarksIntoPlaces(
     return updated ?? place;
   });
 
-  return {
+  const result: KmlImportResult = {
     places: [...places, ...newPlaces],
     addedCount,
-    skippedCount: 0,
+    skippedCount,
     updatedCount,
+    addedNames,
+    skippedDetails,
   };
-}
 
+  logKmlImportResult("update", existingPlaces.length, placemarks.length, result);
+  return result;
+}

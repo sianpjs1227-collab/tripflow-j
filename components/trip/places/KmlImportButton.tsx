@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { FileDown } from "lucide-react";
-import type { KmlPlacemark } from "@/types/kml";
 import { useTripDetail } from "@/contexts/TripDetailContext";
 import {
   hasExistingKmlPlaces,
@@ -11,6 +10,7 @@ import {
 } from "@/lib/kml-import";
 import { extractKmlFromKmzBuffer } from "@/lib/kmz-utils";
 import { parseKmlPlacemarks } from "@/lib/kml-parser";
+import type { KmlImportResult, KmlPlacemark } from "@/types/kml";
 import { Button, Card, OverlayLayer, Text } from "@/components/ui";
 
 function formatImportMessage(
@@ -18,10 +18,13 @@ function formatImportMessage(
   skippedCount: number,
   updatedCount?: number,
 ): string {
-  if (updatedCount != null && updatedCount > 0) {
-    const parts: string[] = [`${updatedCount}개 갱신`];
+  if (updatedCount != null) {
+    const parts: string[] = [];
+    if (updatedCount > 0) parts.push(`${updatedCount}개 갱신`);
     if (addedCount > 0) parts.push(`${addedCount}개 추가`);
-    return parts.join(", ");
+    if (skippedCount > 0) parts.push(`${skippedCount}개 건너뜀`);
+    if (parts.length > 0) return parts.join(", ");
+    return "가져올 장소가 없습니다.";
   }
 
   if (addedCount === 0 && skippedCount === 0) {
@@ -56,21 +59,29 @@ export default function KmlImportButton() {
   };
 
   const applyImport = (placemarks: KmlPlacemark[], mode: "merge" | "update") => {
-    const result =
-      mode === "update"
-        ? updateKmlPlacemarksIntoPlaces(data.places, placemarks)
-        : mergeKmlPlacemarksIntoPlaces(data.places, placemarks);
+    // prev.places 기준으로 merge — 확인 Dialog 동안 stale data.places 사용 방지
+    const holder: { result: KmlImportResult | null } = { result: null };
 
-    updateData((prev) => ({
-      ...prev,
-      places: result.places,
-    }));
+    updateData((prev) => {
+      holder.result =
+        mode === "update"
+          ? updateKmlPlacemarksIntoPlaces(prev.places, placemarks)
+          : mergeKmlPlacemarksIntoPlaces(prev.places, placemarks);
+
+      return {
+        ...prev,
+        places: holder.result.places,
+      };
+    });
+
+    const importResult = holder.result;
+    if (!importResult) return;
 
     setMessage(
       formatImportMessage(
-        result.addedCount,
-        result.skippedCount,
-        result.updatedCount,
+        importResult.addedCount,
+        importResult.skippedCount,
+        importResult.updatedCount,
       ),
     );
   };
