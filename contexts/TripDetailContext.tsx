@@ -26,6 +26,10 @@ import {
   getLocalOnlyEvents,
   mergeRemoteAndLocalEvents,
 } from "@/lib/itinerary-merge";
+import {
+  getLocalOnlyPlaces,
+  mergeRemoteAndLocalPlaces,
+} from "@/lib/place-merge";
 import { prepareItinerariesForSupabaseMigration } from "@/lib/itinerary-migration";
 import {
   fetchSupabaseExpensesByTripId,
@@ -81,10 +85,33 @@ export function TripDetailProvider({
     useState<DetailStorageMode>("local");
   const detailStorageModeRef = useRef<DetailStorageMode>("local");
   const tripDatesRef = useRef<string[]>([]);
+  /** places → Supabase sync 진행 중 카운트 (loadDetail race 방지) */
+  const placesSyncInFlightRef = useRef(0);
 
   useEffect(() => {
     detailStorageModeRef.current = detailStorageMode;
   }, [detailStorageMode]);
+
+  const waitForPlacesSyncIdle = useCallback(async () => {
+    if (placesSyncInFlightRef.current <= 0) return;
+
+    console.log("[TripFlow Detail] places.load.wait_sync", {
+      inFlight: placesSyncInFlightRef.current,
+    });
+
+    const startedAt = Date.now();
+    const timeoutMs = 15_000;
+
+    while (placesSyncInFlightRef.current > 0) {
+      if (Date.now() - startedAt > timeoutMs) {
+        console.warn("[TripFlow Detail] places.load.wait_sync.timeout", {
+          inFlight: placesSyncInFlightRef.current,
+        });
+        break;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    }
+  }, []);
 
   const resolveTripDates = useCallback(
     (events: Event[]) => {
@@ -127,7 +154,12 @@ export function TripDetailProvider({
 
       try {
         if (prev.places !== next.places) {
-          await syncSupabasePlacesDiff(tripId, prev.places, next.places);
+          placesSyncInFlightRef.current += 1;
+          try {
+            await syncSupabasePlacesDiff(tripId, prev.places, next.places);
+          } finally {
+            placesSyncInFlightRef.current -= 1;
+          }
         }
 
         if (prev.events !== next.events) {
@@ -241,6 +273,64 @@ export function TripDetailProvider({
           });
         }
 
+        // sync 진행 중이면 완료를 기다린 뒤 remote/local을 다시 읽어 race 완화
+        if (placesSyncInFlightRef.current > 0) {
+          await waitForPlacesSyncIdle();
+          if (cancelled) return;
+          remotePlaces = await fetchSupabasePlacesByTripId(tripId);
+          detailData = loadTripDetailData(tripId);
+        }
+
+        // remote + local-only(pending) merge — KML import 직후 덮어쓰기 방지
+        let mergedPlaces = mergeRemoteAndLocalPlaces(
+          remotePlaces,
+          detailData.places,
+        );
+        const pendingLocalPlaces = getLocalOnlyPlaces(
+          remotePlaces,
+          detailData.places,
+        );
+
+        if (pendingLocalPlaces.length > 0 && remotePlaces.length > 0) {
+          console.log("[Supabase Query] places.merge_pending", {
+            tripId,
+            remoteCount: remotePlaces.length,
+            localCount: detailData.places.length,
+            pendingCount: pendingLocalPlaces.length,
+            pendingIds: pendingLocalPlaces.map((place) => place.id),
+            pendingNames: pendingLocalPlaces.map((place) => place.name),
+          });
+
+          try {
+            placesSyncInFlightRef.current += 1;
+            try {
+              await syncSupabasePlacesDiff(
+                tripId,
+                remotePlaces,
+                mergedPlaces,
+              );
+            } finally {
+              placesSyncInFlightRef.current -= 1;
+            }
+            // insert 성공 후 remote 재조회로 pending 확정
+            remotePlaces = await fetchSupabasePlacesByTripId(tripId);
+            mergedPlaces = mergeRemoteAndLocalPlaces(remotePlaces, []);
+          } catch (pendingError) {
+            logContextError(
+              "[TripFlow Detail] pending places sync error",
+              pendingError,
+            );
+            // insert 실패 시 mergedPlaces(local pending 포함) 유지
+          }
+        }
+
+        console.log("[TripFlow Detail] places.merge", {
+          tripId,
+          remoteCount: remotePlaces.length,
+          localCount: detailData.places.length,
+          mergedCount: mergedPlaces.length,
+        });
+
         const tripDates = resolveTripDates(detailData.events);
         tripDatesRef.current = tripDates;
 
@@ -257,7 +347,7 @@ export function TripDetailProvider({
             tripId,
             localEvents,
             tripDates,
-            remotePlaces,
+            mergedPlaces,
           );
           mergedEvents = remoteEvents;
         } else {
@@ -305,7 +395,7 @@ export function TripDetailProvider({
                 tripDates,
                 remoteEvents,
                 mergeRemoteAndLocalEvents(remoteEvents, preparedPending),
-                remotePlaces,
+                mergedPlaces,
               );
               // insert 성공 후에만 pending 제거 (remote 재조회로 확정)
               remoteEvents = await fetchSupabaseItinerariesByTripId(
@@ -356,7 +446,7 @@ export function TripDetailProvider({
           setDetailStorageMode("supabase");
           setData({
             ...detailData,
-            places: remotePlaces,
+            places: mergedPlaces,
             events: mergedEvents,
             expenses: remoteExpenses,
             checklist: remoteChecklists,
@@ -389,6 +479,7 @@ export function TripDetailProvider({
     fallbackToLocal,
     logContextError,
     resolveTripDates,
+    waitForPlacesSyncIdle,
   ]);
 
   useEffect(() => {
