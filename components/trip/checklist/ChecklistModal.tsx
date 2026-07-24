@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChecklistInput, ChecklistItem } from "@/types/checklist";
-import { Button, Input, OverlayLayer, Text } from "@/components/ui";
+import { Button, Card, Input, OverlayLayer, Text } from "@/components/ui";
 
 interface ChecklistModalProps {
   isOpen: boolean;
@@ -23,7 +23,14 @@ export default function ChecklistModal({
 }: ChecklistModalProps) {
   const [form, setForm] = useState<ChecklistInput>(EMPTY_FORM);
   const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const isEditing = editingItem !== null;
+
+  const handleClose = useCallback(() => {
+    setForm(EMPTY_FORM);
+    setError("");
+    onClose();
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -34,6 +41,31 @@ export default function ChecklistModal({
     );
     setError("");
   }, [isOpen, editingItem]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const focusTimer = window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 50);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [isOpen, editingItem]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleClose();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, handleClose]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,12 +81,6 @@ export default function ChecklistModal({
     onClose();
   };
 
-  const handleClose = () => {
-    setForm(EMPTY_FORM);
-    setError("");
-    onClose();
-  };
-
   const handleDelete = () => {
     if (!editingItem || !onDelete) return;
     if (!confirm("이 항목을 삭제할까요?")) return;
@@ -65,28 +91,43 @@ export default function ChecklistModal({
   return (
     <OverlayLayer
       isOpen={isOpen}
-      sheet
+      centered
       onClose={handleClose}
       closeLabel="모달 닫기"
+      panelClassName="w-[90vw] max-w-[460px]"
     >
-        <Text variant="title-sm" as="h2" className="text-xl font-bold">
-          {isEditing ? "항목 수정" : "항목 추가"}
+      <Card
+        padding="lg"
+        className="w-full bg-card shadow-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="checklist-modal-title"
+      >
+        <Text
+          variant="title-sm"
+          as="h2"
+          id="checklist-modal-title"
+          className="text-xl font-bold"
+        >
+          {isEditing ? "체크리스트 수정" : "체크리스트 추가"}
         </Text>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <label className="block">
             <Text variant="label" as="span">
-              항목
+              항목명
             </Text>
             <Input
+              ref={inputRef}
               type="text"
               value={form.text}
               onChange={(e) => {
-                setForm({ text: e.target.value });
+                setForm((prev) => ({ ...prev, text: e.target.value }));
                 setError("");
               }}
               placeholder="예: 여권"
               className="mt-1"
+              autoComplete="off"
             />
           </label>
 
@@ -116,10 +157,11 @@ export default function ChecklistModal({
               취소
             </Button>
             <Button type="submit" className="flex-1">
-              저장
+              {isEditing ? "저장" : "추가"}
             </Button>
           </div>
         </form>
+      </Card>
     </OverlayLayer>
   );
 }
