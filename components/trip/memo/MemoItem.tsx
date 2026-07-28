@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Note } from "@/types/note";
-import { formatNoteDate } from "@/lib/note-utils";
+import { formatNoteDate, getNoteType } from "@/lib/note-utils";
 import { Button, Card, Text } from "@/components/ui";
 
 interface MemoItemProps {
@@ -15,9 +15,14 @@ interface MemoItemProps {
 /** 접기/펼치기 가능한 메모 항목 */
 export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const isList = getNoteType(note) === "list";
+  const items = note.items ?? [];
 
-  const preview =
-    note.content.trim().length > 0
+  const preview = isList
+    ? items.length > 0
+      ? `${items.length}개 항목`
+      : "항목 없음"
+    : note.content.trim().length > 0
       ? note.content.trim().split("\n")[0]
       : "내용 없음";
 
@@ -44,6 +49,7 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
           )}
           <Text variant="caption" className="mt-0.5 text-[11px]">
             {formatNoteDate(note.updatedAt)}
+            {isList ? " · 리스트" : ""}
           </Text>
         </div>
         {isOpen ? (
@@ -55,7 +61,51 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
 
       {isOpen && (
         <div className="border-t border-border px-2.5 py-2">
-          {note.content.trim() ? (
+          {isList ? (
+            items.length > 0 ? (
+              <ul className="space-y-2" role="list">
+                {items.map((item) => (
+                  <li key={item.id}>
+                    <div className="flex items-start gap-3 border-b border-border pb-2 last:border-b-0 last:pb-0">
+                      <span
+                        className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border border-border"
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <Text
+                          variant="body-medium"
+                          as="span"
+                          className="block text-[13px] font-semibold"
+                        >
+                          {item.name}
+                        </Text>
+                        {item.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={item.imageUrl}
+                            alt=""
+                            className="h-14 w-14 rounded-lg object-cover"
+                          />
+                        ) : null}
+                        {item.memo ? (
+                          <Text
+                            variant="muted"
+                            className="block whitespace-pre-wrap text-[12px]"
+                          >
+                            {item.memo}
+                          </Text>
+                        ) : null}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Text variant="muted" className="text-[12px]">
+                항목이 없습니다.
+              </Text>
+            )
+          ) : note.content.trim() ? (
             <Text variant="body" className="whitespace-pre-wrap text-[13px]">
               {note.content}
             </Text>

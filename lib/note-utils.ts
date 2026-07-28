@@ -1,4 +1,11 @@
-import type { Note, NoteInput } from "@/types/note";
+import type {
+  ListMemoItem,
+  ListMemoItemInput,
+  ListNoteInput,
+  Note,
+  NoteInput,
+  NoteType,
+} from "@/types/note";
 
 export function generateNoteId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -7,20 +14,65 @@ export function generateNoteId(): string {
   return `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+export function generateListMemoItemId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `memo-item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
 
+export function getNoteType(note: Pick<Note, "type">): NoteType {
+  return note.type === "list" ? "list" : "text";
+}
+
+function normalizeListMemoItem(raw: Partial<ListMemoItem>): ListMemoItem | null {
+  const name = raw.name?.trim() ?? "";
+  if (!name) return null;
+
+  const memo = raw.memo?.trim() || undefined;
+  const imageUrl = raw.imageUrl?.trim() || undefined;
+
+  return {
+    id: raw.id?.trim() || generateListMemoItemId(),
+    name,
+    ...(memo ? { memo } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+  };
+}
+
 /** 저장된 메모 데이터 정규화 (title 없는 예전 데이터 호환) */
 export function normalizeNote(raw: Note & { title?: string }): Note {
+  const type = getNoteType(raw);
   const content = raw.content?.trim() ?? "";
   const title =
     raw.title?.trim() ||
-    content.split("\n")[0]?.trim().slice(0, 40) ||
-    "메모";
+    (type === "list"
+      ? "리스트 메모"
+      : content.split("\n")[0]?.trim().slice(0, 40) || "메모");
+
+  if (type === "list") {
+    const items = (Array.isArray(raw.items) ? raw.items : [])
+      .map((item) => normalizeListMemoItem(item))
+      .filter((item): item is ListMemoItem => item != null);
+
+    return {
+      id: raw.id,
+      type: "list",
+      title,
+      content: "",
+      items,
+      createdAt: raw.createdAt ?? nowIso(),
+      updatedAt: raw.updatedAt ?? raw.createdAt ?? nowIso(),
+    };
+  }
 
   return {
     id: raw.id,
+    type: "text",
     title,
     content,
     createdAt: raw.createdAt ?? nowIso(),
@@ -32,6 +84,7 @@ export function createNote(input: NoteInput): Note {
   const timestamp = nowIso();
   return {
     id: generateNoteId(),
+    type: "text",
     title: input.title.trim(),
     content: input.content.trim(),
     createdAt: timestamp,
@@ -42,9 +95,70 @@ export function createNote(input: NoteInput): Note {
 export function updateNote(existing: Note, input: NoteInput): Note {
   return {
     ...existing,
+    type: "text",
     title: input.title.trim(),
     content: input.content.trim(),
+    items: undefined,
     updatedAt: nowIso(),
+  };
+}
+
+export function createListNote(input: ListNoteInput): Note {
+  const timestamp = nowIso();
+  const items = input.items
+    .map((item) => normalizeListMemoItem(item))
+    .filter((item): item is ListMemoItem => item != null);
+
+  return {
+    id: generateNoteId(),
+    type: "list",
+    title: input.title.trim(),
+    content: "",
+    items,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+export function updateListNote(existing: Note, input: ListNoteInput): Note {
+  const items = input.items
+    .map((item) => normalizeListMemoItem(item))
+    .filter((item): item is ListMemoItem => item != null);
+
+  return {
+    ...existing,
+    type: "list",
+    title: input.title.trim(),
+    content: "",
+    items,
+    updatedAt: nowIso(),
+  };
+}
+
+export function createListMemoItem(input: ListMemoItemInput): ListMemoItem {
+  const memo = input.memo?.trim() || undefined;
+  const imageUrl = input.imageUrl?.trim() || undefined;
+
+  return {
+    id: generateListMemoItemId(),
+    name: input.name.trim(),
+    ...(memo ? { memo } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+  };
+}
+
+export function updateListMemoItem(
+  existing: ListMemoItem,
+  input: ListMemoItemInput,
+): ListMemoItem {
+  const memo = input.memo?.trim() || undefined;
+  const imageUrl = input.imageUrl?.trim() || undefined;
+
+  return {
+    id: existing.id,
+    name: input.name.trim(),
+    ...(memo ? { memo } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
   };
 }
 

@@ -1,30 +1,48 @@
 import { prepareMemosForSupabaseMigration } from "@/lib/memo-migration";
-import { normalizeNote } from "@/lib/note-utils";
+import { getNoteType, normalizeNote } from "@/lib/note-utils";
 import { getSupabaseClient, logSupabaseQueryResult } from "@/lib/supabase";
-import type { Note } from "@/types/note";
+import type { ListMemoItem, Note } from "@/types/note";
 import type {
   SupabaseMemoInsert,
   SupabaseMemoRow,
   SupabaseMemoUpdate,
 } from "@/types/supabase-memo";
 
+function noteItemsForSupabase(note: Note): ListMemoItem[] | null {
+  if (getNoteType(note) !== "list") return null;
+  return note.items ?? [];
+}
+
 function noteToSupabaseInsert(note: Note, tripId: string): SupabaseMemoInsert {
+  const type = getNoteType(note);
   return {
     id: note.id,
     trip_id: tripId,
     title: note.title,
-    content: note.content,
+    content: type === "list" ? "" : note.content,
+    type,
+    items: noteItemsForSupabase(note),
     created_at: note.createdAt,
     updated_at: note.updatedAt,
   };
 }
 
 function noteToSupabaseUpdate(note: Note): SupabaseMemoUpdate {
+  const type = getNoteType(note);
   return {
     title: note.title,
-    content: note.content,
+    content: type === "list" ? "" : note.content,
+    type,
+    items: noteItemsForSupabase(note),
     updated_at: note.updatedAt,
   };
+}
+
+function itemsEqual(
+  a: ListMemoItem[] | null,
+  b: ListMemoItem[] | null,
+): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 
 function supabaseFieldsEqual(
@@ -35,6 +53,8 @@ function supabaseFieldsEqual(
     a.trip_id === b.trip_id &&
     a.title === b.title &&
     a.content === b.content &&
+    a.type === b.type &&
+    itemsEqual(a.items, b.items) &&
     a.created_at === b.created_at &&
     a.updated_at === b.updated_at
   );
@@ -53,8 +73,10 @@ function buildMemoPayloadMap(
 export function supabaseRowToNote(row: SupabaseMemoRow): Note {
   return normalizeNote({
     id: row.id,
+    type: row.type === "list" ? "list" : "text",
     title: row.title,
     content: row.content,
+    items: Array.isArray(row.items) ? row.items : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
