@@ -27,6 +27,9 @@ import {
   mergeRemoteAndLocalEvents,
 } from "@/lib/itinerary-merge";
 import {
+  logPlaceCountPipeline,
+} from "@/lib/place-count-debug";
+import {
   getLocalOnlyPlaces,
   mergeRemoteAndLocalPlaces,
 } from "@/lib/place-merge";
@@ -336,6 +339,18 @@ export function TripDetailProvider({
           mergedCount: mergedPlaces.length,
         });
 
+        logPlaceCountPipeline("loadDetail", tripId, {
+          context: null,
+          localStorage: detailData.places.length,
+          remote: remotePlaces.length,
+          merged: mergedPlaces.length,
+          note:
+            remotePlaces.length !== mergedPlaces.length ||
+            detailData.places.length !== mergedPlaces.length
+              ? `shrink/grow check: local=${detailData.places.length} remote=${remotePlaces.length} merged=${mergedPlaces.length}`
+              : "local/remote/merged aligned",
+        });
+
         const tripDates = resolveTripDates(detailData.events);
         tripDatesRef.current = tripDates;
 
@@ -454,6 +469,14 @@ export function TripDetailProvider({
             { tripId, mergedPlaces: mergedPlaces.length },
           );
           console.log(`[setData] places=${mergedPlaces.length}`, { tripId });
+          logPlaceCountPipeline("loadDetail", tripId, {
+            context: mergedPlaces.length,
+            localStorage: loadTripDetailData(tripId).places.length,
+            remote: remotePlaces.length,
+            merged: mergedPlaces.length,
+            placesTabFinal: mergedPlaces.length,
+            note: "setData about to apply mergedPlaces (Context source of truth)",
+          });
           setData({
             ...detailData,
             places: mergedPlaces,

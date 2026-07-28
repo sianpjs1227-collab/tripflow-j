@@ -1,6 +1,6 @@
 import type { Trip, TripStatus } from "@/types/trip";
 import { formatExpenseTotalDisplay } from "@/lib/expense-utils";
-import { getVisiblePlaces } from "@/lib/place-utils";
+import { resolvePlacesForHomeStats } from "@/lib/place-count-debug";
 import { loadTripDetailData } from "@/lib/trip-detail-storage";
 import { displayDateToIso } from "@/lib/trip-utils";
 import {
@@ -232,9 +232,33 @@ export function getPrimaryTripSubtitle(trip: Trip): string {
   return `${displayName} · 여행 완료`;
 }
 
-/** 홈 카드용 여행 통계 */
+/** 홈 카드용 여행 통계 (동기 — localStorage 즉시 표시) */
 export function getTripHomeStats(trip: Trip): TripHomeStats {
   const detail = loadTripDetailData(trip.id);
+  return buildTripHomeStats(trip, detail.places.length, detail);
+}
+
+/**
+ * 홈 카드용 여행 통계 (비동기)
+ * Supabase places + localStorage merge → 장소 탭과 동일 기준
+ */
+export async function getTripHomeStatsAsync(
+  trip: Trip,
+  options: { useSupabase: boolean },
+): Promise<TripHomeStats> {
+  const detail = loadTripDetailData(trip.id);
+  const resolved = await resolvePlacesForHomeStats(
+    trip.id,
+    options.useSupabase,
+  );
+  return buildTripHomeStats(trip, resolved.mergedCount, detail);
+}
+
+function buildTripHomeStats(
+  trip: Trip,
+  placeCount: number,
+  detail: ReturnType<typeof loadTripDetailData>,
+): TripHomeStats {
   const checklist = detail.checklist;
   const checkedCount = checklist.filter((item) => item.checked).length;
   const preparationRate =
@@ -242,17 +266,6 @@ export function getTripHomeStats(trip: Trip): TripHomeStats {
       ? Math.round((checkedCount / checklist.length) * 100)
       : null;
   const expenseDisplay = formatExpenseTotalDisplay(detail.expenses, trip);
-
-  // 장소 탭(data.places.length)과 동일 기준 — 숨김 필터 없이 전체 개수
-  const placeCount = detail.places.length;
-  const visiblePlaceCount = getVisiblePlaces(detail.places).length;
-
-  console.log("[placeCount.home]", {
-    tripId: trip.id,
-    placesLength: placeCount,
-    visiblePlacesLength: visiblePlaceCount,
-    source: "loadTripDetailData().places.length",
-  });
 
   return {
     scheduleCount: detail.events.length,

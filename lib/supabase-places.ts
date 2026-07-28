@@ -141,6 +141,10 @@ export async function fetchSupabasePlacesByTripId(
 
   const places = (data as SupabasePlaceRow[]).map(supabaseRowToPlace);
   console.log(`[fetch] remotePlaces=${places.length}`, { tripId });
+  console.log("[placeCount.pipeline][fetch]", {
+    tripId,
+    "3_remote": places.length,
+  });
   return places;
 }
 
