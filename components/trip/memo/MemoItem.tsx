@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import type { Note } from "@/types/note";
+import type { ListMemoItem, Note } from "@/types/note";
 import { formatNoteDate, getNoteType } from "@/lib/note-utils";
 import { Button, Card, Text } from "@/components/ui";
+import ListMemoItemDetailDialog from "./ListMemoItemDetailDialog";
 
 interface MemoItemProps {
   note: Note;
@@ -15,6 +16,7 @@ interface MemoItemProps {
 /** 접기/펼치기 가능한 메모 항목 */
 export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [detailItem, setDetailItem] = useState<ListMemoItem | null>(null);
   const isList = getNoteType(note) === "list";
   const items = note.items ?? [];
 
@@ -27,118 +29,136 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
       : "내용 없음";
 
   return (
-    <Card padding="none">
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="flex w-full items-start justify-between gap-3 px-2.5 py-2 text-left"
-        aria-expanded={isOpen}
-      >
-        <div className="min-w-0 flex-1">
-          <Text
-            variant="body-medium"
-            as="h3"
-            className="text-[13px] font-semibold leading-snug"
-          >
-            {note.title}
-          </Text>
-          {!isOpen && (
-            <Text variant="muted" className="mt-0.5 truncate text-[12px]">
-              {preview}
+    <>
+      <Card padding="none">
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="flex w-full items-start justify-between gap-3 px-2.5 py-2 text-left"
+          aria-expanded={isOpen}
+        >
+          <div className="min-w-0 flex-1">
+            <Text
+              variant="body-medium"
+              as="h3"
+              className="text-[13px] font-semibold leading-snug"
+            >
+              {note.title}
             </Text>
+            {!isOpen && (
+              <Text variant="muted" className="mt-0.5 truncate text-[12px]">
+                {preview}
+              </Text>
+            )}
+            <Text variant="caption" className="mt-0.5 text-[11px]">
+              {formatNoteDate(note.updatedAt)}
+              {isList ? " · 리스트" : ""}
+            </Text>
+          </div>
+          {isOpen ? (
+            <ChevronUp
+              className="h-3.5 w-3.5 shrink-0 pt-0.5 text-muted"
+              aria-hidden
+            />
+          ) : (
+            <ChevronDown
+              className="h-3.5 w-3.5 shrink-0 pt-0.5 text-muted"
+              aria-hidden
+            />
           )}
-          <Text variant="caption" className="mt-0.5 text-[11px]">
-            {formatNoteDate(note.updatedAt)}
-            {isList ? " · 리스트" : ""}
-          </Text>
-        </div>
-        {isOpen ? (
-          <ChevronUp className="h-3.5 w-3.5 shrink-0 pt-0.5 text-muted" aria-hidden />
-        ) : (
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 pt-0.5 text-muted" aria-hidden />
-        )}
-      </button>
+        </button>
 
-      {isOpen && (
-        <div className="border-t border-border px-2.5 py-2">
-          {isList ? (
-            items.length > 0 ? (
-              <ul className="space-y-2" role="list">
-                {items.map((item) => (
-                  <li key={item.id}>
-                    <div className="flex items-start gap-3 border-b border-border pb-2 last:border-b-0 last:pb-0">
-                      <span
-                        className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border border-border"
-                        aria-hidden
-                      />
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <Text
-                          variant="body-medium"
-                          as="span"
-                          className="block text-[13px] font-semibold"
-                        >
-                          {item.name}
-                        </Text>
-                        {item.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={item.imageUrl}
-                            alt=""
-                            className="h-14 w-14 rounded-lg object-cover"
-                          />
-                        ) : null}
-                        {item.memo ? (
+        {isOpen && (
+          <div className="border-t border-border px-2.5 py-2">
+            {isList ? (
+              items.length > 0 ? (
+                <ul className="space-y-2" role="list">
+                  {items.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => setDetailItem(item)}
+                        className="flex w-full items-start gap-3 rounded-lg border-b border-border pb-2 text-left last:border-b-0 last:pb-0 hover:bg-background/60"
+                      >
+                        <span
+                          className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border border-border"
+                          aria-hidden
+                        />
+                        <div className="min-w-0 flex-1 space-y-1.5">
                           <Text
-                            variant="muted"
-                            className="block whitespace-pre-wrap text-[12px]"
+                            variant="body-medium"
+                            as="span"
+                            className="block text-[13px] font-semibold"
                           >
-                            {item.memo}
+                            {item.name}
                           </Text>
-                        ) : null}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                          {item.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.imageUrl}
+                              alt=""
+                              className="h-14 w-14 rounded-lg object-cover"
+                            />
+                          ) : null}
+                          {item.memo ? (
+                            <Text
+                              variant="muted"
+                              className="line-clamp-2 block whitespace-pre-wrap text-[12px]"
+                            >
+                              {item.memo}
+                            </Text>
+                          ) : null}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Text variant="muted" className="text-[12px]">
+                  항목이 없습니다.
+                </Text>
+              )
+            ) : note.content.trim() ? (
+              <Text variant="body" className="whitespace-pre-wrap text-[13px]">
+                {note.content}
+              </Text>
             ) : (
               <Text variant="muted" className="text-[12px]">
-                항목이 없습니다.
+                내용이 없습니다.
               </Text>
-            )
-          ) : note.content.trim() ? (
-            <Text variant="body" className="whitespace-pre-wrap text-[13px]">
-              {note.content}
-            </Text>
-          ) : (
-            <Text variant="muted" className="text-[12px]">
-              내용이 없습니다.
-            </Text>
-          )}
+            )}
 
-          <div className="mt-3 flex gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => onEdit(note)}
-            >
-              수정
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                if (!confirm("이 메모를 삭제할까요?")) return;
-                onDelete(note.id);
-              }}
-              className="border-danger/30 text-danger"
-            >
-              삭제
-            </Button>
+            <div className="mt-3 flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => onEdit(note)}
+              >
+                수정
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (!confirm("이 메모를 삭제할까요?")) return;
+                  onDelete(note.id);
+                }}
+                className="border-danger/30 text-danger"
+              >
+                삭제
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
-    </Card>
+        )}
+      </Card>
+
+      <ListMemoItemDetailDialog
+        item={detailItem}
+        isOpen={detailItem != null}
+        onClose={() => setDetailItem(null)}
+      />
+    </>
   );
 }
