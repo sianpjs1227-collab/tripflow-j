@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, MapPin } from "lucide-react";
 import type { AddPlaceToScheduleInput, Place, PlaceInput, PlaceTravelRecordInput } from "@/types/place";
 import { useTripDetail } from "@/contexts/TripDetailContext";
@@ -58,6 +58,15 @@ export default function PlacesTab() {
     () => getVisiblePlaces(data.places),
     [data.places],
   );
+
+  useEffect(() => {
+    console.log("[placeCount.placesTab]", {
+      tripId,
+      placesLength: data.places.length,
+      visiblePlacesLength: visiblePlaces.length,
+      source: "TripDetailContext data.places.length",
+    });
+  }, [tripId, data.places.length, visiblePlaces.length]);
 
   const totalFavoriteCount = useMemo(
     () => visiblePlaces.filter((place) => favoriteIds.has(place.id)).length,

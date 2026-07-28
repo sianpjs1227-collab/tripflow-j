@@ -10,7 +10,7 @@ import {
 } from "@/lib/trip-detail-events";
 
 /**
- * 홈 여행카드 통계 — places.length 기준, 상세 데이터 변경 시 즉시 갱신
+ * 홈 여행카드 통계 — data.places.length 기준, 상세 데이터 변경 시 즉시 갱신
  */
 export function useTripHomeStats(trip: Trip): TripHomeStats {
   const revision = useSyncExternalStore(

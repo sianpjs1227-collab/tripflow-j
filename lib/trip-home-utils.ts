@@ -243,9 +243,20 @@ export function getTripHomeStats(trip: Trip): TripHomeStats {
       : null;
   const expenseDisplay = formatExpenseTotalDisplay(detail.expenses, trip);
 
+  // 장소 탭(data.places.length)과 동일 기준 — 숨김 필터 없이 전체 개수
+  const placeCount = detail.places.length;
+  const visiblePlaceCount = getVisiblePlaces(detail.places).length;
+
+  console.log("[placeCount.home]", {
+    tripId: trip.id,
+    placesLength: placeCount,
+    visiblePlacesLength: visiblePlaceCount,
+    source: "loadTripDetailData().places.length",
+  });
+
   return {
     scheduleCount: detail.events.length,
-    placeCount: getVisiblePlaces(detail.places).length,
+    placeCount,
     expensePrimary: expenseDisplay.primary,
     expenseSecondary: expenseDisplay.secondary,
     preparationRate,
