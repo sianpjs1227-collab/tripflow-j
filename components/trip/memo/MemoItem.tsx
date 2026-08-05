@@ -141,9 +141,9 @@ export default function MemoItem({
             ) : (
               <div className="space-y-3">
                 {note.content.trim() ? (
-                  <Text variant="body" className="text-[13px]" as="div">
+                  <div className="text-[13px] text-foreground">
                     <LinkifiedText text={note.content} />
-                  </Text>
+                  </div>
                 ) : (
                   <Text variant="muted" className="text-[12px]">
                     내용이 없습니다.
