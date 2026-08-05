@@ -7,6 +7,7 @@ import { formatNoteDate, getNoteType } from "@/lib/note-utils";
 import { Button, Card, Text } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import ListMemoItemDetailDialog from "./ListMemoItemDetailDialog";
+import LinkifiedText from "./LinkifiedText";
 
 interface MemoItemProps {
   note: Note;
@@ -140,11 +141,8 @@ export default function MemoItem({
             ) : (
               <div className="space-y-3">
                 {note.content.trim() ? (
-                  <Text
-                    variant="body"
-                    className="whitespace-pre-wrap text-[13px]"
-                  >
-                    {note.content}
+                  <Text variant="body" className="text-[13px]" as="div">
+                    <LinkifiedText text={note.content} />
                   </Text>
                 ) : (
                   <Text variant="muted" className="text-[12px]">
