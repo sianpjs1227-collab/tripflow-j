@@ -59,6 +59,8 @@ interface OverlayLayerProps {
   onClose?: () => void;
   closeLabel?: string;
   panelClassName?: string;
+  /** 딤 오버레이 추가 클래스 (예: bg-black/80) */
+  overlayClassName?: string;
   /** Bottom Sheet 스타일 (하단 정렬, 80vh, 핸들) */
   sheet?: boolean;
   /** sheet일 때 상단 Drag Handle */
@@ -79,6 +81,7 @@ export function OverlayLayer({
   onClose,
   closeLabel = "닫기",
   panelClassName,
+  overlayClassName,
   sheet = false,
   showHandle = true,
   scrollBody = true,
@@ -200,6 +203,7 @@ export function OverlayLayer({
           className={cn(
             "fixed inset-0 z-overlay touch-none bg-black/40",
             closing ? "animate-fade-out" : "animate-fade-in",
+            overlayClassName,
           )}
           onClick={onClose}
           aria-label={closeLabel}

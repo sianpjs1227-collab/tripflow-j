@@ -10,7 +10,7 @@ interface ListMemoItemDetailDialogProps {
   onClose: () => void;
 }
 
-/** 리스트 메모 항목 상세 보기 — 중앙 Dialog */
+/** 리스트/일반 메모 공통 이미지·항목 상세 보기 Dialog */
 export default function ListMemoItemDetailDialog({
   item,
   isOpen,
@@ -36,54 +36,71 @@ export default function ListMemoItemDetailDialog({
 
   if (!item) return null;
 
+  const hasImage = Boolean(item.imageUrl?.trim());
+  const hasMemo = Boolean(item.memo?.trim());
+  const showTitle = item.name.trim().length > 0;
+
   return (
     <OverlayLayer
       isOpen={isOpen}
       centered
       onClose={handleClose}
       closeLabel="상세 닫기"
-      panelClassName="w-[90vw] max-w-[460px]"
+      overlayClassName="bg-black/80"
+      panelClassName="w-[92vw] max-w-[640px]"
     >
       <Card
         padding="lg"
-        className="max-h-[85vh] w-full overflow-y-auto bg-card shadow-xl"
+        className="max-h-[90vh] w-full overflow-y-auto bg-card shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="list-memo-item-detail-title"
       >
-        <Text
-          variant="title-sm"
-          as="h2"
-          id="list-memo-item-detail-title"
-          className="text-xl font-bold"
-        >
-          {item.checked ? "☑ " : ""}
-          {item.name}
-        </Text>
+        {showTitle ? (
+          <Text
+            variant="title-sm"
+            as="h2"
+            id="list-memo-item-detail-title"
+            className="text-xl font-bold"
+          >
+            {item.checked ? "☑ " : ""}
+            {item.name}
+          </Text>
+        ) : (
+          <span id="list-memo-item-detail-title" className="sr-only">
+            이미지 보기
+          </span>
+        )}
 
-        {item.imageUrl ? (
-          <div className="mt-4 overflow-hidden rounded-xl border border-border">
+        {hasImage ? (
+          <div
+            className={
+              showTitle
+                ? "mt-4 overflow-hidden rounded-xl"
+                : "overflow-hidden rounded-xl"
+            }
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={item.imageUrl}
-              alt={item.name}
-              className="h-auto w-full object-contain"
+              alt={item.name || "첨부 이미지"}
+              className="mx-auto h-auto max-h-[75vh] w-full object-contain"
             />
           </div>
         ) : null}
 
-        {item.memo?.trim() ? (
+        {hasMemo ? (
           <Text
             variant="body"
             className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed"
           >
             {item.memo}
           </Text>
-        ) : (
+        ) : !hasImage ? (
           <Text variant="muted" className="mt-4 text-[13px]">
             메모가 없습니다.
           </Text>
-        )}
+        ) : null}
 
         <div className="mt-5">
           <Button

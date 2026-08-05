@@ -154,13 +154,26 @@ export default function MemoItem({
                 {images.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {images.map((url, index) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <button
                         key={`${note.id}-img-${index}`}
-                        src={url}
-                        alt=""
-                        className="h-20 w-20 rounded-xl object-cover"
-                      />
+                        type="button"
+                        onClick={() =>
+                          setDetailItem({
+                            id: `${note.id}-img-${index}`,
+                            name: note.title,
+                            imageUrl: url,
+                          })
+                        }
+                        className="overflow-hidden rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        aria-label={`${note.title} 사진 ${index + 1} 크게 보기`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt=""
+                          className="h-20 w-20 object-cover transition-opacity hover:opacity-90"
+                        />
+                      </button>
                     ))}
                   </div>
                 ) : null}
