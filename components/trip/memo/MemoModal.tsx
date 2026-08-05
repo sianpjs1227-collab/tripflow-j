@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { NoteInput, Note } from "@/types/note";
 import { Button, Input, OverlayLayer, Text, Textarea } from "@/components/ui";
+import MemoImagesPicker from "./MemoImagesPicker";
 
 interface MemoModalProps {
   isOpen: boolean;
@@ -12,7 +13,7 @@ interface MemoModalProps {
   onDelete?: (id: string) => void;
 }
 
-const EMPTY_FORM: NoteInput = { title: "", content: "" };
+const EMPTY_FORM: NoteInput = { title: "", content: "", images: [] };
 
 export default function MemoModal({
   isOpen,
@@ -32,6 +33,7 @@ export default function MemoModal({
       setForm({
         title: editingNote.title,
         content: editingNote.content,
+        images: editingNote.images ?? [],
       });
     } else {
       setForm(EMPTY_FORM);
@@ -39,7 +41,7 @@ export default function MemoModal({
     setError("");
   }, [isOpen, editingNote]);
 
-  const handleChange = (field: keyof NoteInput, value: string) => {
+  const handleChange = (field: "title" | "content", value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setError("");
   };
@@ -52,7 +54,11 @@ export default function MemoModal({
       return;
     }
 
-    onSave(form);
+    onSave({
+      title: form.title,
+      content: form.content,
+      images: form.images,
+    });
     setForm(EMPTY_FORM);
     setError("");
     onClose();
@@ -78,67 +84,73 @@ export default function MemoModal({
       onClose={handleClose}
       closeLabel="모달 닫기"
     >
-        <Text variant="title-sm" as="h2" className="text-xl font-bold">
-          {isEditing ? "메모 수정" : "메모 추가"}
-        </Text>
+      <Text variant="title-sm" as="h2" className="text-xl font-bold">
+        {isEditing ? "메모 수정" : "메모 추가"}
+      </Text>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <label className="block">
-            <Text variant="label" as="span">
-              제목
-            </Text>
-            <Input
-              type="text"
-              value={form.title}
-              onChange={(e) => handleChange("title", e.target.value)}
-              placeholder="예: 맛집 리스트"
-              className="mt-1"
-            />
-          </label>
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <label className="block">
+          <Text variant="label" as="span">
+            제목
+          </Text>
+          <Input
+            type="text"
+            value={form.title}
+            onChange={(e) => handleChange("title", e.target.value)}
+            placeholder="예: 후쿠오카 디저트"
+            className="mt-1"
+          />
+        </label>
 
-          <label className="block">
-            <Text variant="label" as="span">
-              내용
-            </Text>
-            <Textarea
-              value={form.content}
-              onChange={(e) => handleChange("content", e.target.value)}
-              placeholder="메모 내용을 입력하세요"
-              rows={6}
-              className="mt-1"
-            />
-          </label>
+        <label className="block">
+          <Text variant="label" as="span">
+            내용
+          </Text>
+          <Textarea
+            value={form.content}
+            onChange={(e) => handleChange("content", e.target.value)}
+            placeholder="메모 내용을 입력하세요"
+            rows={6}
+            className="mt-1"
+          />
+        </label>
 
-          {error && (
-            <Text variant="body" className="text-danger" role="alert">
-              {error}
-            </Text>
-          )}
+        <MemoImagesPicker
+          values={form.images ?? []}
+          onChange={(images) => setForm((prev) => ({ ...prev, images }))}
+          onError={setError}
+        />
 
-          <div className="flex gap-3 pt-2">
-            {isEditing && onDelete && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleDelete}
-                className="border-danger/30 text-danger"
-              >
-                삭제
-              </Button>
-            )}
+        {error && (
+          <Text variant="body" className="text-danger" role="alert">
+            {error}
+          </Text>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          {isEditing && onDelete && (
             <Button
               type="button"
               variant="secondary"
-              onClick={handleClose}
-              className="flex-1"
+              onClick={handleDelete}
+              className="border-danger/30 text-danger"
             >
-              취소
+              삭제
             </Button>
-            <Button type="submit" className="flex-1">
-              저장
-            </Button>
-          </div>
-        </form>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleClose}
+            className="flex-1"
+          >
+            취소
+          </Button>
+          <Button type="submit" className="flex-1">
+            저장
+          </Button>
+        </div>
+      </form>
     </OverlayLayer>
   );
 }

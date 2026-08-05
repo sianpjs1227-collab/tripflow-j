@@ -8,6 +8,8 @@ export interface SupabaseMemoRow {
   content: string;
   type?: NoteType | null;
   items?: ListMemoItem[] | null;
+  /** 일반 메모 다중 사진 */
+  images?: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -19,6 +21,7 @@ export interface SupabaseMemoInsert {
   content: string;
   type: NoteType;
   items: ListMemoItem[] | null;
+  images: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,5 +31,6 @@ export interface SupabaseMemoUpdate {
   content: string;
   type: NoteType;
   items: ListMemoItem[] | null;
+  images: string[] | null;
   updated_at: string;
 }

@@ -5,20 +5,28 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import type { ListMemoItem, Note } from "@/types/note";
 import { formatNoteDate, getNoteType } from "@/lib/note-utils";
 import { Button, Card, Text } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import ListMemoItemDetailDialog from "./ListMemoItemDetailDialog";
 
 interface MemoItemProps {
   note: Note;
   onEdit: (note: Note) => void;
   onDelete: (id: string) => void;
+  onToggleListItem?: (noteId: string, itemId: string) => void;
 }
 
 /** 접기/펼치기 가능한 메모 항목 */
-export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
+export default function MemoItem({
+  note,
+  onEdit,
+  onDelete,
+  onToggleListItem,
+}: MemoItemProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<ListMemoItem | null>(null);
   const isList = getNoteType(note) === "list";
   const items = note.items ?? [];
+  const images = note.images ?? [];
 
   const preview = isList
     ? items.length > 0
@@ -26,7 +34,9 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
       : "항목 없음"
     : note.content.trim().length > 0
       ? note.content.trim().split("\n")[0]
-      : "내용 없음";
+      : images.length > 0
+        ? `사진 ${images.length}장`
+        : "내용 없음";
 
   return (
     <>
@@ -75,20 +85,29 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
                 <ul className="space-y-2" role="list">
                   {items.map((item) => (
                     <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => setDetailItem(item)}
-                        className="flex w-full items-start gap-3 rounded-lg border-b border-border pb-2 text-left last:border-b-0 last:pb-0 hover:bg-background/60"
-                      >
-                        <span
-                          className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border border-border"
-                          aria-hidden
+                      <div className="flex items-start gap-2 border-b border-border pb-2 last:border-b-0 last:pb-0">
+                        <input
+                          type="checkbox"
+                          checked={item.checked === true}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            onToggleListItem?.(note.id, item.id);
+                          }}
+                          className="mt-1 h-4 w-4 shrink-0 rounded border-border accent-primary"
+                          aria-label={`${item.name} 체크`}
                         />
-                        <div className="min-w-0 flex-1 space-y-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setDetailItem(item)}
+                          className="min-w-0 flex-1 space-y-1.5 text-left hover:opacity-90"
+                        >
                           <Text
                             variant="body-medium"
                             as="span"
-                            className="block text-[13px] font-semibold"
+                            className={cn(
+                              "block text-[13px] font-semibold",
+                              item.checked && "text-muted line-through",
+                            )}
                           >
                             {item.name}
                           </Text>
@@ -108,8 +127,8 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
                               {item.memo}
                             </Text>
                           ) : null}
-                        </div>
-                      </button>
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -118,14 +137,34 @@ export default function MemoItem({ note, onEdit, onDelete }: MemoItemProps) {
                   항목이 없습니다.
                 </Text>
               )
-            ) : note.content.trim() ? (
-              <Text variant="body" className="whitespace-pre-wrap text-[13px]">
-                {note.content}
-              </Text>
             ) : (
-              <Text variant="muted" className="text-[12px]">
-                내용이 없습니다.
-              </Text>
+              <div className="space-y-3">
+                {note.content.trim() ? (
+                  <Text
+                    variant="body"
+                    className="whitespace-pre-wrap text-[13px]"
+                  >
+                    {note.content}
+                  </Text>
+                ) : (
+                  <Text variant="muted" className="text-[12px]">
+                    내용이 없습니다.
+                  </Text>
+                )}
+                {images.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {images.map((url, index) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={`${note.id}-img-${index}`}
+                        src={url}
+                        alt=""
+                        className="h-20 w-20 rounded-xl object-cover"
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             )}
 
             <div className="mt-3 flex gap-2">

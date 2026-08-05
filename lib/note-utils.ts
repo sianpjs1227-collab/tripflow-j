@@ -29,18 +29,29 @@ export function getNoteType(note: Pick<Note, "type">): NoteType {
   return note.type === "list" ? "list" : "text";
 }
 
+function normalizeImages(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const images = raw
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return images.length > 0 ? images : undefined;
+}
+
 function normalizeListMemoItem(raw: Partial<ListMemoItem>): ListMemoItem | null {
   const name = raw.name?.trim() ?? "";
   if (!name) return null;
 
   const memo = raw.memo?.trim() || undefined;
   const imageUrl = raw.imageUrl?.trim() || undefined;
+  const checked = raw.checked === true;
 
   return {
     id: raw.id?.trim() || generateListMemoItemId(),
     name,
     ...(memo ? { memo } : {}),
     ...(imageUrl ? { imageUrl } : {}),
+    ...(checked ? { checked: true } : {}),
   };
 }
 
@@ -53,6 +64,7 @@ export function normalizeNote(raw: Note & { title?: string }): Note {
     (type === "list"
       ? "리스트 메모"
       : content.split("\n")[0]?.trim().slice(0, 40) || "메모");
+  const images = normalizeImages(raw.images);
 
   if (type === "list") {
     const items = (Array.isArray(raw.items) ? raw.items : [])
@@ -75,6 +87,7 @@ export function normalizeNote(raw: Note & { title?: string }): Note {
     type: "text",
     title,
     content,
+    ...(images ? { images } : {}),
     createdAt: raw.createdAt ?? nowIso(),
     updatedAt: raw.updatedAt ?? raw.createdAt ?? nowIso(),
   };
@@ -82,22 +95,26 @@ export function normalizeNote(raw: Note & { title?: string }): Note {
 
 export function createNote(input: NoteInput): Note {
   const timestamp = nowIso();
+  const images = normalizeImages(input.images);
   return {
     id: generateNoteId(),
     type: "text",
     title: input.title.trim(),
     content: input.content.trim(),
+    ...(images ? { images } : {}),
     createdAt: timestamp,
     updatedAt: timestamp,
   };
 }
 
 export function updateNote(existing: Note, input: NoteInput): Note {
+  const images = normalizeImages(input.images);
   return {
     ...existing,
     type: "text",
     title: input.title.trim(),
     content: input.content.trim(),
+    images,
     items: undefined,
     updatedAt: nowIso(),
   };
@@ -112,7 +129,7 @@ export function createListNote(input: ListNoteInput): Note {
   return {
     id: generateNoteId(),
     type: "list",
-    title: input.title.trim(),
+    title: input.title.trim() || "리스트 메모",
     content: "",
     items,
     createdAt: timestamp,
@@ -128,8 +145,9 @@ export function updateListNote(existing: Note, input: ListNoteInput): Note {
   return {
     ...existing,
     type: "list",
-    title: input.title.trim(),
+    title: input.title.trim() || existing.title || "리스트 메모",
     content: "",
+    images: undefined,
     items,
     updatedAt: nowIso(),
   };
@@ -138,12 +156,14 @@ export function updateListNote(existing: Note, input: ListNoteInput): Note {
 export function createListMemoItem(input: ListMemoItemInput): ListMemoItem {
   const memo = input.memo?.trim() || undefined;
   const imageUrl = input.imageUrl?.trim() || undefined;
+  const checked = input.checked === true;
 
   return {
     id: generateListMemoItemId(),
     name: input.name.trim(),
     ...(memo ? { memo } : {}),
     ...(imageUrl ? { imageUrl } : {}),
+    ...(checked ? { checked: true } : {}),
   };
 }
 
@@ -153,12 +173,14 @@ export function updateListMemoItem(
 ): ListMemoItem {
   const memo = input.memo?.trim() || undefined;
   const imageUrl = input.imageUrl?.trim() || undefined;
+  const checked = input.checked === true;
 
   return {
     id: existing.id,
     name: input.name.trim(),
     ...(memo ? { memo } : {}),
     ...(imageUrl ? { imageUrl } : {}),
+    ...(checked ? { checked: true } : {}),
   };
 }
 

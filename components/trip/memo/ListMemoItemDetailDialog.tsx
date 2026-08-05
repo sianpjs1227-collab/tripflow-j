@@ -57,6 +57,7 @@ export default function ListMemoItemDetailDialog({
           id="list-memo-item-detail-title"
           className="text-xl font-bold"
         >
+          {item.checked ? "☑ " : ""}
           {item.name}
         </Text>
 

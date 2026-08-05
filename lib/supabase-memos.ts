@@ -13,6 +13,12 @@ function noteItemsForSupabase(note: Note): ListMemoItem[] | null {
   return note.items ?? [];
 }
 
+function noteImagesForSupabase(note: Note): string[] | null {
+  if (getNoteType(note) === "list") return null;
+  const images = note.images?.filter((url) => url.trim()) ?? [];
+  return images.length > 0 ? images : null;
+}
+
 function noteToSupabaseInsert(note: Note, tripId: string): SupabaseMemoInsert {
   const type = getNoteType(note);
   return {
@@ -22,6 +28,7 @@ function noteToSupabaseInsert(note: Note, tripId: string): SupabaseMemoInsert {
     content: type === "list" ? "" : note.content,
     type,
     items: noteItemsForSupabase(note),
+    images: noteImagesForSupabase(note),
     created_at: note.createdAt,
     updated_at: note.updatedAt,
   };
@@ -34,6 +41,7 @@ function noteToSupabaseUpdate(note: Note): SupabaseMemoUpdate {
     content: type === "list" ? "" : note.content,
     type,
     items: noteItemsForSupabase(note),
+    images: noteImagesForSupabase(note),
     updated_at: note.updatedAt,
   };
 }
@@ -42,6 +50,10 @@ function itemsEqual(
   a: ListMemoItem[] | null,
   b: ListMemoItem[] | null,
 ): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+function imagesEqual(a: string[] | null, b: string[] | null): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 
@@ -55,6 +67,7 @@ function supabaseFieldsEqual(
     a.content === b.content &&
     a.type === b.type &&
     itemsEqual(a.items, b.items) &&
+    imagesEqual(a.images, b.images) &&
     a.created_at === b.created_at &&
     a.updated_at === b.updated_at
   );
@@ -77,6 +90,7 @@ export function supabaseRowToNote(row: SupabaseMemoRow): Note {
     title: row.title,
     content: row.content,
     items: Array.isArray(row.items) ? row.items : undefined,
+    images: Array.isArray(row.images) ? row.images : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });

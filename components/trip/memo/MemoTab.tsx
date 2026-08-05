@@ -23,6 +23,8 @@ function MemoTabContent() {
   const [isTextModalOpen, setIsTextModalOpen] = useState(false);
   const [isListEditorOpen, setIsListEditorOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  /** 자동 저장으로 생성된/편집 중인 리스트 메모 id */
+  const [listNoteId, setListNoteId] = useState<string | null>(null);
 
   const notes = useMemo(
     () =>
@@ -34,11 +36,13 @@ function MemoTabContent() {
 
   const openCreatePicker = () => {
     setEditingNote(null);
+    setListNoteId(null);
     setIsTypePickerOpen(true);
   };
 
   const handleSelectType = (type: NoteType) => {
     setEditingNote(null);
+    setListNoteId(null);
     if (type === "list") {
       setIsListEditorOpen(true);
     } else {
@@ -49,8 +53,10 @@ function MemoTabContent() {
   const openEdit = (note: Note) => {
     setEditingNote(note);
     if (getNoteType(note) === "list") {
+      setListNoteId(note.id);
       setIsListEditorOpen(true);
     } else {
+      setListNoteId(null);
       setIsTextModalOpen(true);
     }
   };
@@ -63,6 +69,7 @@ function MemoTabContent() {
   const closeListEditor = () => {
     setIsListEditorOpen(false);
     setEditingNote(null);
+    setListNoteId(null);
   };
 
   const handleSaveText = (input: NoteInput) => {
@@ -83,22 +90,45 @@ function MemoTabContent() {
     });
   };
 
+  /** 리스트 메모 자동 저장 — 기존 있으면 update, 없으면 create */
   const handleSaveList = (input: ListNoteInput) => {
-    updateData((prev) => {
-      if (editingNote) {
-        return {
-          ...prev,
-          notes: prev.notes.map((note) =>
-            note.id === editingNote.id ? updateListNote(note, input) : note,
-          ),
-        };
-      }
-
-      return {
+    if (listNoteId) {
+      updateData((prev) => ({
         ...prev,
-        notes: [createListNote(input), ...prev.notes],
-      };
-    });
+        notes: prev.notes.map((note) =>
+          note.id === listNoteId ? updateListNote(note, input) : note,
+        ),
+      }));
+      return;
+    }
+
+    const created = createListNote(input);
+    setListNoteId(created.id);
+    updateData((prev) => ({
+      ...prev,
+      notes: [created, ...prev.notes],
+    }));
+  };
+
+  const handleToggleListItem = (noteId: string, itemId: string) => {
+    updateData((prev) => ({
+      ...prev,
+      notes: prev.notes.map((note) => {
+        if (note.id !== noteId || getNoteType(note) !== "list") return note;
+        const items = (note.items ?? []).map((item) => {
+          if (item.id !== itemId) return item;
+          const nextChecked = item.checked !== true;
+          return {
+            id: item.id,
+            name: item.name,
+            ...(item.memo ? { memo: item.memo } : {}),
+            ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+            ...(nextChecked ? { checked: true as const } : {}),
+          };
+        });
+        return updateListNote(note, { title: note.title, items });
+      }),
+    }));
   };
 
   const handleDelete = (id: string) => {
@@ -128,6 +158,7 @@ function MemoTabContent() {
                 note={note}
                 onEdit={openEdit}
                 onDelete={handleDelete}
+                onToggleListItem={handleToggleListItem}
               />
             </li>
           ))}
@@ -159,6 +190,7 @@ function MemoTabContent() {
             ? editingNote
             : null
         }
+        persistedNoteId={listNoteId}
         onClose={closeListEditor}
         onSave={handleSaveList}
         onDelete={handleDelete}
