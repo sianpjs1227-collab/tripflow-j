@@ -2,6 +2,7 @@ import type { TripDetailData } from "@/types/trip-detail";
 import { createEmptyTripDetailData } from "@/types/trip-detail";
 import type { Expense } from "@/types/expense";
 import type { Place, PlaceSource } from "@/types/place";
+import { isPendingPlaceDeletion } from "@/lib/place-pending-deletes";
 import {
   inferPlaceSource,
   normalizePlaceCategory,
@@ -107,17 +108,67 @@ export function loadTripDetailData(tripId: string): TripDetailData {
   return normalizeTripDetailData(data);
 }
 
+/**
+ * localStorage places 에서 삭제된 id 를 강제 제거.
+ * stale useEffect 가 옛 places 를 다시 써도 merge_pending 이
+ * 삭제분을 local-only insert 로 오인하지 않게 한다.
+ */
+export function purgePlacesFromTripDetail(
+  tripId: string,
+  placeIds: string[],
+): void {
+  if (placeIds.length === 0) return;
+  const remove = new Set(placeIds);
+  const existing = loadTripDetailData(tripId);
+  const nextPlaces = existing.places.filter((place) => !remove.has(place.id));
+  if (nextPlaces.length === existing.places.length) {
+    console.log("[places.delete.persist][purgeLS] noop", {
+      tripId,
+      placeIds,
+      placesLength: existing.places.length,
+    });
+    return;
+  }
+  console.log("[places.delete.persist][purgeLS]", {
+    tripId,
+    removedIds: placeIds,
+    before: existing.places.length,
+    after: nextPlaces.length,
+  });
+  // pending delete 필터를 우회하지 않도록 직접 write (아래 save 가 필터함)
+  const store = readStore();
+  store[tripId] = { ...existing, places: nextPlaces };
+  writeStore(store);
+  notifyTripDetailUpdated(tripId);
+}
+
 export function saveTripDetailData(tripId: string, data: TripDetailData): void {
-  console.log(`[saveTripDetailData] places=${data.places.length}`, {
+  // stale Context effect 가 삭제된 place 를 다시 쓰지 못하도록 tombstone 필터
+  const places = data.places.filter(
+    (place) => !isPendingPlaceDeletion(place.id),
+  );
+  const stripped = data.places.length - places.length;
+  if (stripped > 0) {
+    console.log("[places.delete.persist][save.stripPendingDeletes]", {
+      tripId,
+      stripped,
+      before: data.places.length,
+      after: places.length,
+    });
+  }
+
+  const toSave = stripped > 0 ? { ...data, places } : data;
+
+  console.log(`[saveTripDetailData] places=${toSave.places.length}`, {
     tripId,
     stage: "before_write",
   });
   console.log("[places.delete.persist][4_saveTripDetailData]", {
     tripId,
-    placesLength: data.places.length,
+    placesLength: toSave.places.length,
   });
   const store = readStore();
-  store[tripId] = data;
+  store[tripId] = toSave;
   writeStore(store);
   notifyTripDetailUpdated(tripId);
 }

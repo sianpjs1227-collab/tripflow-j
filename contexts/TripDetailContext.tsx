@@ -33,7 +33,12 @@ import {
   getLocalOnlyPlaces,
   mergeRemoteAndLocalPlaces,
 } from "@/lib/place-merge";
-import { notePendingPlaceDeletions, getPendingPlaceDeletions } from "@/lib/place-pending-deletes";
+import {
+  notePendingPlaceDeletions,
+  getPendingPlaceDeletions,
+  clearPendingPlaceDeletions,
+  isPendingPlaceDeletion,
+} from "@/lib/place-pending-deletes";
 import { prepareItinerariesForSupabaseMigration } from "@/lib/itinerary-migration";
 import {
   fetchSupabaseExpensesByTripId,
@@ -58,6 +63,7 @@ import type { Event } from "@/types/event";
 import {
   loadTripDetailData,
   saveTripDetailData,
+  purgePlacesFromTripDetail,
 } from "@/lib/trip-detail-storage";
 import { getPlaceById, upsertPlace } from "@/lib/place-utils";
 import { isUuid } from "@/lib/supabase";
@@ -357,7 +363,28 @@ export function TripDetailProvider({
           detailData = loadTripDetailData(tripId);
         }
 
+        // tombstone(삭제 확정 id) 은 merge/pending insert 전에 LS·detail 에서 제거
+        const pendingDeleteIds = getPendingPlaceDeletions();
+        if (pendingDeleteIds.length > 0) {
+          const beforeLen = detailData.places.length;
+          const cleanedPlaces = detailData.places.filter(
+            (place) => !isPendingPlaceDeletion(place.id),
+          );
+          if (cleanedPlaces.length !== beforeLen) {
+            console.log("[places.delete.persist][loadDetail.stripTombstones]", {
+              tripId,
+              pendingDeleteIds,
+              before: beforeLen,
+              after: cleanedPlaces.length,
+              removed: beforeLen - cleanedPlaces.length,
+            });
+            detailData = { ...detailData, places: cleanedPlaces };
+            purgePlacesFromTripDetail(tripId, pendingDeleteIds);
+          }
+        }
+
         // remote + local-only(pending) merge — KML import 직후 덮어쓰기 방지
+        // tombstone id 는 merge/getLocalOnly 에서 제외 → 삭제분 re-insert 방지
         let mergedPlaces = mergeRemoteAndLocalPlaces(
           remotePlaces,
           detailData.places,
@@ -384,6 +411,7 @@ export function TripDetailProvider({
             pendingIds: pendingLocalPlaces.map((place) => place.id),
             pendingNames: pendingLocalPlaces.map((place) => place.name),
             pendingDeletesStillOnRemote,
+            tombstones: getPendingPlaceDeletions(),
           });
 
           try {
@@ -401,6 +429,12 @@ export function TripDetailProvider({
             }
             // insert/delete 성공 후 remote 재조회로 확정
             remotePlaces = await fetchSupabasePlacesByTripId(tripId);
+            detailData = {
+              ...detailData,
+              places: loadTripDetailData(tripId).places.filter(
+                (place) => !isPendingPlaceDeletion(place.id),
+              ),
+            };
             mergedPlaces = mergeRemoteAndLocalPlaces(
               remotePlaces,
               detailData.places,
@@ -412,6 +446,21 @@ export function TripDetailProvider({
             );
             // insert 실패 시 mergedPlaces(local pending 포함) 유지
           }
+        }
+
+        // remote·merged 모두에 없는 tombstone 만 해제 (merge 복원 위험 해소 후)
+        const resolvedDeletes = getPendingPlaceDeletions().filter((id) => {
+          const onRemote = remotePlaces.some((place) => place.id === id);
+          const onMerged = mergedPlaces.some((place) => place.id === id);
+          return !onRemote && !onMerged;
+        });
+        if (resolvedDeletes.length > 0) {
+          clearPendingPlaceDeletions(resolvedDeletes);
+          console.log("[places.delete.persist][tombstone.clearAfterMerge]", {
+            tripId,
+            cleared: resolvedDeletes,
+            remaining: getPendingPlaceDeletions(),
+          });
         }
 
         console.log("[TripFlow Detail] places.merge", {

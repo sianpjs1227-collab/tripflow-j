@@ -1,5 +1,5 @@
 import { preparePlacesForSupabaseMigration } from "@/lib/place-migration";
-import { clearPendingPlaceDeletions } from "@/lib/place-pending-deletes";
+import { isPendingPlaceDeletion } from "@/lib/place-pending-deletes";
 import {
   inferPlaceSource,
   normalizePlaceCategory,
@@ -10,6 +10,7 @@ import {
   isUuid,
   logSupabaseQueryResult,
 } from "@/lib/supabase";
+import { purgePlacesFromTripDetail } from "@/lib/trip-detail-storage";
 import type { Place } from "@/types/place";
 import type {
   SupabasePlaceInsert,
@@ -290,11 +291,26 @@ export async function syncSupabasePlacesDiff(
   const nextMap = new Map(nextPlaces.map((place) => [place.id, place]));
 
   const deletes = [...prevMap.keys()].filter((id) => !nextMap.has(id));
-  const inserts = [...nextMap.keys()].filter((id) => !prevMap.has(id));
+  // tombstone 이 남은 삭제분은 절대 insert 하지 않음 (merge_pending 복원 방지)
+  const inserts = [...nextMap.keys()].filter(
+    (id) => !prevMap.has(id) && !isPendingPlaceDeletion(id),
+  );
   const updates = [...nextMap.keys()].filter((id) => {
     if (!prevMap.has(id)) return false;
+    if (isPendingPlaceDeletion(id)) return false;
     return !supabaseFieldsEqual(prevMap.get(id)!, nextMap.get(id)!);
   });
+
+  const skippedInserts = [...nextMap.keys()].filter(
+    (id) => !prevMap.has(id) && isPendingPlaceDeletion(id),
+  );
+  if (skippedInserts.length > 0) {
+    console.warn("[places.delete.persist][sync.skipInsertPendingDeletes]", {
+      tripId,
+      skippedInserts,
+      note: "blocked re-insert of tombstoned (deleted) place ids",
+    });
+  }
 
   console.log(
     `[sync] insert=${inserts.length} update=${updates.length} delete=${deletes.length}`,
@@ -328,8 +344,17 @@ export async function syncSupabasePlacesDiff(
     });
   }
 
-  // 실제로 삭제된 id 만 tombstone 해제 (0행이면 throw 로 여기 미도달)
-  clearPendingPlaceDeletions(successfullyDeleted);
+  // Supabase 삭제 성공 후에도 tombstone 은 유지한다.
+  // (너무 일찍 clear 하면 LS 에 남은 삭제분이 merge_pending → insert 로 복원됨)
+  // LS 에서만 강제 purge — clear 는 loadDetail merge 확정 후 수행
+  if (successfullyDeleted.length > 0) {
+    purgePlacesFromTripDetail(tripId, successfullyDeleted);
+    console.log("[places.delete.persist][tombstone.keepAfterDelete]", {
+      tripId,
+      deletedIds: successfullyDeleted,
+      note: "tombstones kept until loadDetail merge confirms no resurrection",
+    });
+  }
 
   await Promise.all(
     inserts.map((id) => insertSupabasePlace(tripId, nextMap.get(id)!)),
