@@ -17,13 +17,15 @@ function formatImportMessage(
   addedCount: number,
   skippedCount: number,
   updatedCount?: number,
+  deletedCount?: number,
 ): string {
   if (updatedCount != null) {
     const parts: string[] = [];
-    if (updatedCount > 0) parts.push(`${updatedCount}개 갱신`);
-    if (addedCount > 0) parts.push(`${addedCount}개 추가`);
-    if (skippedCount > 0) parts.push(`${skippedCount}개 건너뜀`);
-    if (parts.length > 0) return parts.join(", ");
+    if (addedCount > 0) parts.push(`추가 ${addedCount}개`);
+    if (updatedCount > 0) parts.push(`업데이트 ${updatedCount}개`);
+    if ((deletedCount ?? 0) > 0) parts.push(`삭제 ${deletedCount}개`);
+    if (skippedCount > 0) parts.push(`건너뜀 ${skippedCount}개`);
+    if (parts.length > 0) return parts.join("\n");
     return "가져올 장소가 없습니다.";
   }
 
@@ -52,25 +54,54 @@ export default function KmlImportButton() {
   const [pendingPlacemarks, setPendingPlacemarks] = useState<
     KmlPlacemark[] | null
   >(null);
+  /** KML에 없는 KML 장소 삭제 — 기본 OFF */
+  const [removeMissingKmlPlaces, setRemoveMissingKmlPlaces] = useState(false);
 
   const handleClick = () => {
     setMessage(null);
     fileInputRef.current?.click();
   };
 
-  const applyImport = (placemarks: KmlPlacemark[], mode: "merge" | "update") => {
+  const applyImport = (
+    placemarks: KmlPlacemark[],
+    mode: "merge" | "update",
+    options?: { removeMissingKmlPlaces?: boolean },
+  ) => {
     // prev.places 기준으로 merge — 확인 Dialog 동안 stale data.places 사용 방지
     const holder: { result: KmlImportResult | null } = { result: null };
 
     updateData((prev) => {
       holder.result =
         mode === "update"
-          ? updateKmlPlacemarksIntoPlaces(prev.places, placemarks)
+          ? updateKmlPlacemarksIntoPlaces(prev.places, placemarks, {
+              removeMissingKmlPlaces: options?.removeMissingKmlPlaces === true,
+            })
           : mergeKmlPlacemarksIntoPlaces(prev.places, placemarks);
+
+      const nextPlaces = holder.result.places;
+      const deletedIds = holder.result.deletedIds ?? [];
+
+      console.log("[KmlImportButton] applyImport → updateData", {
+        mode,
+        removeMissingKmlPlaces: options?.removeMissingKmlPlaces === true,
+        prevPlacesLength: prev.places.length,
+        nextPlacesLength: nextPlaces.length,
+        deletedCount: holder.result.deletedCount ?? 0,
+        deletedIds,
+        deletedNames: holder.result.deletedNames ?? [],
+        deletedStillInNext: deletedIds.filter((id) =>
+          nextPlaces.some((place) => place.id === id),
+        ),
+      });
+      console.log("[places.delete.persist][1_kml.deletedIds]", {
+        deletedIds,
+        deletedNames: holder.result.deletedNames ?? [],
+        nextPlacesLength: nextPlaces.length,
+      });
 
       return {
         ...prev,
-        places: holder.result.places,
+        places: nextPlaces,
       };
     });
 
@@ -82,6 +113,7 @@ export default function KmlImportButton() {
         importResult.addedCount,
         importResult.skippedCount,
         importResult.updatedCount,
+        importResult.deletedCount,
       ),
     );
   };
@@ -113,6 +145,7 @@ export default function KmlImportButton() {
       }
 
       if (hasExistingKmlPlaces(data.places) && placemarks.length > 0) {
+        setRemoveMissingKmlPlaces(false);
         setPendingPlacemarks(placemarks);
         return;
       }
@@ -125,12 +158,16 @@ export default function KmlImportButton() {
 
   const handleConfirmUpdate = () => {
     if (!pendingPlacemarks) return;
-    applyImport(pendingPlacemarks, "update");
+    applyImport(pendingPlacemarks, "update", {
+      removeMissingKmlPlaces,
+    });
     setPendingPlacemarks(null);
+    setRemoveMissingKmlPlaces(false);
   };
 
   const handleCancelUpdate = () => {
     setPendingPlacemarks(null);
+    setRemoveMissingKmlPlaces(false);
   };
 
   return (
@@ -155,7 +192,11 @@ export default function KmlImportButton() {
       </Button>
 
       {message && (
-        <Text variant="muted" className="mt-2" role="status">
+        <Text
+          variant="muted"
+          className="mt-2 whitespace-pre-line"
+          role="status"
+        >
           {message}
         </Text>
       )}
@@ -175,6 +216,29 @@ export default function KmlImportButton() {
               KML에서 가져온 장소는 최신 정보로 갱신됩니다. 직접 추가한 장소와
               일정·즐겨찾기는 유지됩니다.
             </Text>
+
+            <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl border border-border bg-background px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={removeMissingKmlPlaces}
+                onChange={(e) => setRemoveMissingKmlPlaces(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-primary"
+              />
+              <span className="min-w-0">
+                <Text
+                  variant="body-medium"
+                  as="span"
+                  className="block text-[13px]"
+                >
+                  KML에 없는 KML 장소 삭제
+                </Text>
+                <Text variant="muted" as="span" className="mt-0.5 block text-[12px]">
+                  My Maps에서 지운 장소만 앱에서도 제거합니다. 직접 추가한
+                  장소는 삭제되지 않습니다.
+                </Text>
+              </span>
+            </label>
+
             <div className="mt-5 flex gap-2">
               <Button
                 type="button"

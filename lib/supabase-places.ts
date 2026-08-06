@@ -1,4 +1,5 @@
 import { preparePlacesForSupabaseMigration } from "@/lib/place-migration";
+import { clearPendingPlaceDeletions } from "@/lib/place-pending-deletes";
 import {
   inferPlaceSource,
   normalizePlaceCategory,
@@ -178,15 +179,99 @@ export async function updateSupabasePlace(place: Place): Promise<void> {
   if (error) throw error;
 }
 
-/** 장소 삭제 */
-export async function deleteSupabasePlace(placeId: string): Promise<void> {
+/** 장소 삭제 — affected rows 검증 (RLS로 0행이면 성공처럼 보이던 문제 방지) */
+export async function deleteSupabasePlace(
+  placeId: string,
+): Promise<{ affectedRows: number; alreadyAbsent: boolean; data: unknown }> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
 
-  const { error } = await client.from("places").delete().eq("id", placeId);
+  const payload = { placeId };
 
-  logSupabaseQueryResult("places.delete", { placeId }, error);
+  // delete 전 존재 여부 확인 — 0행이 "없음" vs "RLS 거부" 구분
+  const { data: existing, error: existingError } = await client
+    .from("places")
+    .select("id, name, trip_id")
+    .eq("id", placeId)
+    .maybeSingle();
+
+  console.log("[Supabase Query] places.delete.precheck", {
+    payload,
+    existing,
+    existingError: existingError
+      ? {
+          message: existingError.message,
+          code: existingError.code,
+          details: existingError.details,
+        }
+      : null,
+  });
+
+  if (existingError) throw existingError;
+
+  if (!existing) {
+    console.log("[Supabase Query] places.delete.result", {
+      payload,
+      error: null,
+      affectedRows: 0,
+      alreadyAbsent: true,
+      note: "row not visible/absent — treat delete as done",
+    });
+    return { affectedRows: 0, alreadyAbsent: true, data: null };
+  }
+
+  const { data, error, count } = await client
+    .from("places")
+    .delete({ count: "exact" })
+    .eq("id", placeId)
+    .select("id");
+
+  const affectedRows =
+    typeof count === "number"
+      ? count
+      : Array.isArray(data)
+        ? data.length
+        : 0;
+
+  console.log("[Supabase Query] places.delete.result", {
+    payload,
+    error: error
+      ? {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        }
+      : null,
+    affectedRows,
+    alreadyAbsent: false,
+    returnedIds: Array.isArray(data)
+      ? data.map((row: { id?: string }) => row.id)
+      : data,
+    precheckName: existing.name,
+  });
+
+  logSupabaseQueryResult(
+    "places.delete",
+    { placeId, affectedRows, data, precheck: existing },
+    error,
+  );
+
   if (error) throw error;
+
+  if (affectedRows === 0) {
+    console.error(
+      "[Supabase Query Error] places.delete\n" +
+        `message: row existed but delete matched 0 rows (likely RLS)\n` +
+        `code: DELETE_ZERO_ROWS\n` +
+        `details: placeId=${placeId} name=${existing.name}`,
+    );
+    throw new Error(
+      `places.delete affected 0 rows for id=${placeId} (RLS blocked?)`,
+    );
+  }
+
+  return { affectedRows, alreadyAbsent: false, data };
 }
 
 /** places 배열 diff 동기화 */
@@ -220,9 +305,31 @@ export async function syncSupabasePlacesDiff(
     deletes,
     inserts,
     updates,
+    deletesHaveIds: deletes.length > 0,
+    deleteNames: deletes.map((id) => prevMap.get(id)?.name ?? id),
+  });
+  console.log("[places.delete.persist][2_syncDiff.deletes]", {
+    tripId,
+    deletes,
+    deleteNames: deletes.map((id) => prevMap.get(id)?.name ?? id),
   });
 
-  await Promise.all(deletes.map((id) => deleteSupabasePlace(id)));
+  const successfullyDeleted: string[] = [];
+  for (const id of deletes) {
+    const result = await deleteSupabasePlace(id);
+    successfullyDeleted.push(id);
+    console.log("[places.delete.persist][3_supabaseDelete]", {
+      tripId,
+      placeId: id,
+      name: prevMap.get(id)?.name ?? null,
+      affectedRows: result.affectedRows,
+      alreadyAbsent: result.alreadyAbsent,
+      ok: result.affectedRows > 0 || result.alreadyAbsent,
+    });
+  }
+
+  // 실제로 삭제된 id 만 tombstone 해제 (0행이면 throw 로 여기 미도달)
+  clearPendingPlaceDeletions(successfullyDeleted);
 
   await Promise.all(
     inserts.map((id) => insertSupabasePlace(tripId, nextMap.get(id)!)),
@@ -234,7 +341,8 @@ export async function syncSupabasePlacesDiff(
     tripId,
     insert: inserts.length,
     update: updates.length,
-    delete: deletes.length,
+    delete: successfullyDeleted.length,
+    deletedIds: successfullyDeleted,
   });
 }
 

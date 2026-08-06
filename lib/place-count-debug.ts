@@ -1,4 +1,5 @@
 import { mergeRemoteAndLocalPlaces } from "@/lib/place-merge";
+import { getPendingPlaceDeletions } from "@/lib/place-pending-deletes";
 import { getVisiblePlaces } from "@/lib/place-utils";
 import { isUuid } from "@/lib/supabase";
 import { fetchSupabasePlacesByTripId } from "@/lib/supabase-places";
@@ -93,6 +94,21 @@ export async function resolvePlacesForHomeStats(
       remotePlaces,
       detail.places,
     );
+    const pendingDeletes = getPendingPlaceDeletions();
+    const localIds = new Set(detail.places.map((place) => place.id));
+    const remoteOnlyAdded = mergedPlaces.filter(
+      (place) => !localIds.has(place.id),
+    );
+
+    console.log("[places.delete.persist][home.entry]", {
+      tripId,
+      loadTripDetailData: localCount,
+      fetchSupabasePlacesByTripId: remotePlaces.length,
+      merged: mergedPlaces.length,
+      pendingDeletes,
+      remoteOnlyAddedIds: remoteOnlyAdded.map((place) => place.id),
+      remoteOnlyAddedNames: remoteOnlyAdded.map((place) => place.name),
+    });
 
     logPlaceCountPipeline("home", tripId, {
       localStorage: localCount,
@@ -105,7 +121,33 @@ export async function resolvePlacesForHomeStats(
           : "localStorage already matches merge",
     });
 
-    // 홈에서도 LS를 Context/remote 기준으로 write-through → 이후 홈/탭 일치
+    // 홈 writeThrough 가 삭제된 장소를 다시 LS에 넣지 않도록:
+    // local 비어있지 한데 merge 가 remote-only 를 추가하면 skip
+    // (pending delete tombstone 이 있으면 merge 가 이미 걸러야 함)
+    const wouldResurrect =
+      detail.places.length > 0 && remoteOnlyAdded.length > 0;
+
+    if (wouldResurrect) {
+      console.warn("[places.delete.persist][home.writeThrough.skip]", {
+        tripId,
+        reason:
+          "merge would add remote-only places into localStorage (possible delete resurrection)",
+        before: localCount,
+        merged: mergedPlaces.length,
+        remoteOnlyAddedIds: remoteOnlyAdded.map((place) => place.id),
+        pendingDeletes,
+      });
+      // 통계는 local(삭제 반영) 우선 — Context/ tombstone 과 맞춤
+      const safePlaces =
+        pendingDeletes.length > 0 ? detail.places : mergedPlaces;
+      return {
+        places: safePlaces,
+        localCount,
+        remoteCount: remotePlaces.length,
+        mergedCount: safePlaces.length,
+      };
+    }
+
     if (
       mergedPlaces.length !== detail.places.length ||
       !samePlaceIds(mergedPlaces, detail.places)

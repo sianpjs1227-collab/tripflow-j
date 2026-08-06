@@ -69,6 +69,7 @@ function logKmlImportResult(
     kmlCount,
     updatedCount: result.updatedCount ?? 0,
     addedCount: result.addedCount,
+    deletedCount: result.deletedCount ?? 0,
     skippedCount: result.skippedCount,
   });
 
@@ -76,6 +77,19 @@ function logKmlImportResult(
     console.log(`[KML ${mode}] 신규 추가`);
     for (const name of addedNames) {
       console.log(`- ${name}`);
+    }
+  }
+
+  if ((result.deletedNames?.length ?? 0) > 0) {
+    console.log(`[KML ${mode}] 삭제`, {
+      deletedCount: result.deletedCount ?? 0,
+      deletedIds: result.deletedIds ?? [],
+      deletedNames: result.deletedNames ?? [],
+    });
+    for (let i = 0; i < (result.deletedNames?.length ?? 0); i += 1) {
+      console.log(
+        `- ${result.deletedNames![i]} (${result.deletedIds?.[i] ?? "?"})`,
+      );
     }
   }
 
@@ -154,11 +168,18 @@ export function mergeKmlPlacemarksIntoPlaces(
  * - 동일 이름의 기존 KML 장소가 있으면 → update
  * - 없으면 → 항상 add (MANUAL 동명이 있어도 My Maps 신규는 추가)
  * - 같은 KML 파일 안 동명 반복 → 첫 항목만 반영, 나머지 skip
+ *
+ * removeMissingKmlPlaces=true 이면:
+ * - source=KML 이면서 현재 KML에 없는 장소만 삭제
+ * - MANUAL 장소는 절대 삭제하지 않음
  */
 export function updateKmlPlacemarksIntoPlaces(
   existingPlaces: Place[],
   placemarks: KmlPlacemark[],
+  options?: { removeMissingKmlPlaces?: boolean },
 ): KmlImportResult {
+  const removeMissing = options?.removeMissingKmlPlaces === true;
+
   const kmlByName = new Map<string, Place>();
   for (const place of existingPlaces) {
     if (!isKmlPlace(place)) continue;
@@ -175,6 +196,8 @@ export function updateKmlPlacemarksIntoPlaces(
   );
 
   const updatesById = new Map<string, Place>();
+  /** 이번 KML 파일에서 매칭되어 유지/갱신된 기존 KML place id */
+  const matchedExistingKmlIds = new Set<string>();
   const newPlaces: Place[] = [];
   const addedNames: string[] = [];
   const skippedDetails: KmlSkipDetail[] = [];
@@ -204,6 +227,7 @@ export function updateKmlPlacemarksIntoPlaces(
     const existingKml = kmlByName.get(name);
 
     if (existingKml) {
+      matchedExistingKmlIds.add(existingKml.id);
       updatesById.set(
         existingKml.id,
         applyPlacemarkToExistingKmlPlace(existingKml, placemark),
@@ -227,19 +251,79 @@ export function updateKmlPlacemarksIntoPlaces(
     }
   }
 
+  const newPlaceIds = new Set(newPlaces.map((place) => place.id));
+
   const places = existingPlaces.map((place) => {
     const updated = updatesById.get(place.id);
     return updated ?? place;
   });
 
+  let nextPlaces = [...places, ...newPlaces];
+  const deletedNames: string[] = [];
+  const deletedIds: string[] = [];
+
+  if (removeMissing) {
+    const beforeCount = nextPlaces.length;
+    const removalCandidates = nextPlaces.filter((place) => {
+      if (!isKmlPlace(place)) return false;
+      // 이번 파일에서 매칭된 기존 장소·신규 추가는 유지
+      if (matchedExistingKmlIds.has(place.id)) return false;
+      if (newPlaceIds.has(place.id)) return false;
+      return true;
+    });
+
+    console.log("[KML update] delete candidates", {
+      removeMissing,
+      candidateCount: removalCandidates.length,
+      deletedIds: removalCandidates.map((place) => place.id),
+      deletedNames: removalCandidates.map((place) => place.name),
+      matchedExistingKmlIds: [...matchedExistingKmlIds],
+      newPlaceIds: [...newPlaceIds],
+      seenInThisFileCount: seenInThisFile.size,
+    });
+
+    nextPlaces = nextPlaces.filter((place) => {
+      if (!isKmlPlace(place)) return true;
+      if (matchedExistingKmlIds.has(place.id)) return true;
+      if (newPlaceIds.has(place.id)) return true;
+      deletedIds.push(place.id);
+      deletedNames.push(place.name.trim() || place.id);
+      return false;
+    });
+
+    const stillPresent = deletedIds.filter((id) =>
+      nextPlaces.some((place) => place.id === id),
+    );
+
+    console.log("[KML update] delete applied to places array", {
+      beforeCount,
+      afterCount: nextPlaces.length,
+      deletedCount: deletedIds.length,
+      deletedIds,
+      deletedNames,
+      stillPresentInFinalPlaces: stillPresent,
+      excludedOk: stillPresent.length === 0,
+    });
+  }
+
   const result: KmlImportResult = {
-    places: [...places, ...newPlaces],
+    places: nextPlaces,
     addedCount,
     skippedCount,
     updatedCount,
+    deletedCount: deletedIds.length,
     addedNames,
+    deletedNames,
+    deletedIds,
     skippedDetails,
   };
+
+  console.log("[KML update] final places for updateData", {
+    placesLength: result.places.length,
+    existingCount: existingPlaces.length,
+    delta: result.places.length - existingPlaces.length,
+    deletedIds: result.deletedIds ?? [],
+  });
 
   logKmlImportResult("update", existingPlaces.length, placemarks.length, result);
   return result;

@@ -108,7 +108,14 @@ export function loadTripDetailData(tripId: string): TripDetailData {
 }
 
 export function saveTripDetailData(tripId: string, data: TripDetailData): void {
-  console.log(`[saveTripDetailData] places=${data.places.length}`, { tripId });
+  console.log(`[saveTripDetailData] places=${data.places.length}`, {
+    tripId,
+    stage: "before_write",
+  });
+  console.log("[places.delete.persist][4_saveTripDetailData]", {
+    tripId,
+    placesLength: data.places.length,
+  });
   const store = readStore();
   store[tripId] = data;
   writeStore(store);

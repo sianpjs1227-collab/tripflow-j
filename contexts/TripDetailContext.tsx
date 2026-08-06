@@ -33,6 +33,7 @@ import {
   getLocalOnlyPlaces,
   mergeRemoteAndLocalPlaces,
 } from "@/lib/place-merge";
+import { notePendingPlaceDeletions, getPendingPlaceDeletions } from "@/lib/place-pending-deletes";
 import { prepareItinerariesForSupabaseMigration } from "@/lib/itinerary-migration";
 import {
   fetchSupabaseExpensesByTripId,
@@ -153,13 +154,62 @@ export function TripDetailProvider({
 
   const syncDetailToSupabase = useCallback(
     async (prev: TripDetailData, next: TripDetailData) => {
-      if (detailStorageModeRef.current !== "supabase") return;
+      if (detailStorageModeRef.current !== "supabase") {
+        console.warn("[places.delete.persist][sync.skip]", {
+          tripId,
+          reason: "detailStorageMode !== supabase",
+          mode: detailStorageModeRef.current,
+          prevPlaces: prev.places.length,
+          nextPlaces: next.places.length,
+        });
+        return;
+      }
 
       try {
         if (prev.places !== next.places) {
+          const nextIds = new Set(next.places.map((place) => place.id));
+          const deletedIds = prev.places
+            .filter((place) => !nextIds.has(place.id))
+            .map((place) => place.id);
+
+          console.log("[places.delete.persist][sync.start]", {
+            tripId,
+            prevPlaces: prev.places.length,
+            nextPlaces: next.places.length,
+            deletedIds,
+            contextPlaces: next.places.length,
+            localStoragePlaces: loadTripDetailData(tripId).places.length,
+          });
+
           placesSyncInFlightRef.current += 1;
           try {
             await syncSupabasePlacesDiff(tripId, prev.places, next.places);
+
+            // 삭제 직후 3곳 개수 스냅샷
+            let remoteCount: number | null = null;
+            try {
+              const remote = await fetchSupabasePlacesByTripId(tripId);
+              remoteCount = remote.length;
+            } catch (fetchError) {
+              console.warn(
+                "[places.delete.persist][7_postDelete.remoteFetchFailed]",
+                fetchError,
+              );
+            }
+
+            console.log("[places.delete.persist][7_postDelete.counts]", {
+              tripId,
+              context: next.places.length,
+              localStorage: loadTripDetailData(tripId).places.length,
+              supabase: remoteCount,
+              deletedIds,
+              note:
+                remoteCount != null &&
+                deletedIds.length > 0 &&
+                remoteCount === next.places.length
+                  ? "Context=LS=Supabase aligned after delete"
+                  : "check divergence — delete may not have persisted to Supabase",
+            });
           } finally {
             placesSyncInFlightRef.current -= 1;
           }
@@ -204,6 +254,11 @@ export function TripDetailProvider({
         console.error(
           "[TripFlow Detail] sync failed — keeping in-memory schedule data",
         );
+        console.error("[places.delete.persist][sync.failed]", {
+          tripId,
+          error,
+          note: "tombstones kept — merge must not resurrect until delete succeeds",
+        });
       }
     },
     [tripId, logContextError, resolveTripDates],
@@ -216,6 +271,14 @@ export function TripDetailProvider({
 
     async function loadDetail() {
       const localData = loadTripDetailData(tripId);
+      console.log("[places.delete.persist][5_loadDetail.localStorage]", {
+        tripId,
+        placesLength: localData.places.length,
+      });
+      console.log(
+        `[loadTripDetailData] places=${localData.places.length}`,
+        { tripId },
+      );
       const useSupabase = authMode === "supabase" && user != null;
 
       if (!useSupabase) {
@@ -252,6 +315,11 @@ export function TripDetailProvider({
           `[loadDetail] local=${localPlaces.length} remote=${remotePlaces.length}`,
           { tripId },
         );
+        console.log("[places.delete.persist][6_loadDetail.remote]", {
+          tripId,
+          fetchSupabasePlacesByTripId: remotePlaces.length,
+          loadTripDetailData: localPlaces.length,
+        });
 
         if (
           remotePlaces.length === 0 &&
@@ -298,20 +366,31 @@ export function TripDetailProvider({
           remotePlaces,
           detailData.places,
         );
+        const pendingDeletesStillOnRemote = getPendingPlaceDeletions().filter(
+          (id) => remotePlaces.some((place) => place.id === id),
+        );
+        const shouldPushLocalPlacesDiff =
+          remotePlaces.length > 0 &&
+          (pendingLocalPlaces.length > 0 ||
+            pendingDeletesStillOnRemote.length > 0);
 
-        if (pendingLocalPlaces.length > 0 && remotePlaces.length > 0) {
+        if (shouldPushLocalPlacesDiff) {
           console.log("[Supabase Query] places.merge_pending", {
             tripId,
             remoteCount: remotePlaces.length,
             localCount: detailData.places.length,
+            mergedCount: mergedPlaces.length,
             pendingCount: pendingLocalPlaces.length,
             pendingIds: pendingLocalPlaces.map((place) => place.id),
             pendingNames: pendingLocalPlaces.map((place) => place.name),
+            pendingDeletesStillOnRemote,
           });
 
           try {
             placesSyncInFlightRef.current += 1;
             try {
+              // mergedPlaces = (remote - tombstone deletes) + local-only inserts
+              // → pending insert는 올리고, 로컬 삭제분만 remote에서 제거
               await syncSupabasePlacesDiff(
                 tripId,
                 remotePlaces,
@@ -320,9 +399,12 @@ export function TripDetailProvider({
             } finally {
               placesSyncInFlightRef.current -= 1;
             }
-            // insert 성공 후 remote 재조회로 pending 확정
+            // insert/delete 성공 후 remote 재조회로 확정
             remotePlaces = await fetchSupabasePlacesByTripId(tripId);
-            mergedPlaces = mergeRemoteAndLocalPlaces(remotePlaces, []);
+            mergedPlaces = mergeRemoteAndLocalPlaces(
+              remotePlaces,
+              detailData.places,
+            );
           } catch (pendingError) {
             logContextError(
               "[TripFlow Detail] pending places sync error",
@@ -532,10 +614,38 @@ export function TripDetailProvider({
           prev.checklist !== next.checklist ||
           prev.notes !== next.notes
         ) {
-          console.log(`[updateData] places=${next.places.length}`, {
-            tripId,
-            prevPlaces: prev.places.length,
-          });
+          if (prev.places !== next.places) {
+            const nextIds = new Set(next.places.map((place) => place.id));
+            const removed = prev.places.filter(
+              (place) => !nextIds.has(place.id),
+            );
+            const deletedIds = removed.map((place) => place.id);
+            const deletedNames = removed.map((place) => place.name);
+
+            if (deletedIds.length > 0) {
+              notePendingPlaceDeletions(deletedIds);
+            }
+
+            console.log(`[updateData] places=${next.places.length}`, {
+              tripId,
+              prevPlaces: prev.places.length,
+              nextPlaces: next.places.length,
+              deletedIds,
+              deletedNames,
+              stillInNext: deletedIds.filter((id) => nextIds.has(id)),
+            });
+            console.log("[places.delete.persist][1_kmlOrUpdateData.deletedIds]", {
+              tripId,
+              deletedIds,
+              deletedNames,
+              contextNextLength: next.places.length,
+            });
+          } else {
+            console.log(`[updateData] places=${next.places.length}`, {
+              tripId,
+              prevPlaces: prev.places.length,
+            });
+          }
           // insert 실패 시에도 재접속에서 복구되도록 sync 전에 local 보존
           saveTripDetailData(tripId, next);
           void syncDetailToSupabase(prev, next);

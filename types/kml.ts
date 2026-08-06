@@ -32,8 +32,14 @@ export interface KmlImportResult {
   addedCount: number;
   skippedCount: number;
   updatedCount?: number;
+  /** KML에 없어 삭제한 KML 장소 수 (옵션 ON일 때만) */
+  deletedCount?: number;
   /** 이번 import에서 새로 추가된 장소명 */
   addedNames?: string[];
+  /** 삭제한 KML 장소명 */
+  deletedNames?: string[];
+  /** 삭제한 KML 장소 id */
+  deletedIds?: string[];
   /** 건너뛴 장소명 + 이유 */
   skippedDetails?: KmlSkipDetail[];
 }
