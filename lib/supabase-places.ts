@@ -221,6 +221,33 @@ export async function deleteSupabasePlace(
     return { affectedRows: 0, alreadyAbsent: true, data: null };
   }
 
+  // RLS 진단: SELECT OK / DELETE 0 rows 원인 확인
+  const tripId = existing.trip_id as string;
+  const { data: accessDebug, error: accessError } = await client.rpc(
+    "debug_places_delete_access",
+    { p_place_id: placeId },
+  );
+  const { data: canEdit, error: canEditError } = await client.rpc(
+    "can_edit_trip",
+    { p_trip_id: tripId },
+  );
+
+  console.log("[Supabase Query] places.delete.rls_check", {
+    placeId,
+    tripId,
+    name: existing.name,
+    can_edit_trip: canEdit,
+    canEditError: canEditError
+      ? { message: canEditError.message, code: canEditError.code }
+      : null,
+    debug_places_delete_access: accessDebug,
+    accessError: accessError
+      ? { message: accessError.message, code: accessError.code }
+      : null,
+    note:
+      "SELECT uses is_trip_member; DELETE uses can_edit_trip(owner|editor|trips.user_id). places has no owner/created_by column.",
+  });
+
   const { data, error, count } = await client
     .from("places")
     .delete({ count: "exact" })
@@ -250,11 +277,15 @@ export async function deleteSupabasePlace(
       ? data.map((row: { id?: string }) => row.id)
       : data,
     precheckName: existing.name,
+    rlsHint:
+      affectedRows === 0
+        ? "DELETE policy blocked (can_edit_trip=false or places_delete_editor missing). Apply migration 20260314000021_places_delete_rls_repair.sql"
+        : null,
   });
 
   logSupabaseQueryResult(
     "places.delete",
-    { placeId, affectedRows, data, precheck: existing },
+    { placeId, affectedRows, data, precheck: existing, accessDebug, canEdit },
     error,
   );
 
@@ -265,7 +296,8 @@ export async function deleteSupabasePlace(
       "[Supabase Query Error] places.delete\n" +
         `message: row existed but delete matched 0 rows (likely RLS)\n` +
         `code: DELETE_ZERO_ROWS\n` +
-        `details: placeId=${placeId} name=${existing.name}`,
+        `details: placeId=${placeId} name=${existing.name} tripId=${tripId} can_edit_trip=${String(canEdit)}\n` +
+        `hint: SELECT=is_trip_member, DELETE=can_edit_trip(owner|editor|trips.user_id). Run places_delete_rls_repair migration.`,
     );
     throw new Error(
       `places.delete affected 0 rows for id=${placeId} (RLS blocked?)`,
