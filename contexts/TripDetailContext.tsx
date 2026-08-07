@@ -39,6 +39,11 @@ import {
   clearPendingPlaceDeletions,
   isPendingPlaceDeletion,
 } from "@/lib/place-pending-deletes";
+import {
+  logDeleteTrace,
+  logDeleteTraceFinalSuccess,
+  watchDeletedPlaces,
+} from "@/lib/place-delete-trace";
 import { prepareItinerariesForSupabaseMigration } from "@/lib/itinerary-migration";
 import {
   fetchSupabaseExpensesByTripId,
@@ -186,6 +191,9 @@ export function TripDetailProvider({
             contextPlaces: next.places.length,
             localStoragePlaces: loadTripDetailData(tripId).places.length,
           });
+          logDeleteTrace("syncDetailToSupabase.before", tripId, next.places, {
+            deletedIds,
+          });
 
           placesSyncInFlightRef.current += 1;
           try {
@@ -193,9 +201,16 @@ export function TripDetailProvider({
 
             // 삭제 직후 3곳 개수 스냅샷
             let remoteCount: number | null = null;
+            let remotePlaces: Place[] = [];
             try {
-              const remote = await fetchSupabasePlacesByTripId(tripId);
-              remoteCount = remote.length;
+              remotePlaces = await fetchSupabasePlacesByTripId(tripId);
+              remoteCount = remotePlaces.length;
+              logDeleteTrace(
+                "syncDetailToSupabase.afterFetchRemote",
+                tripId,
+                remotePlaces,
+                { deletedIds },
+              );
             } catch (fetchError) {
               console.warn(
                 "[places.delete.persist][7_postDelete.remoteFetchFailed]",
@@ -203,10 +218,14 @@ export function TripDetailProvider({
               );
             }
 
+            const lsPlaces = loadTripDetailData(tripId).places;
+            logDeleteTrace("syncDetailToSupabase.after.localStorage", tripId, lsPlaces);
+            logDeleteTrace("syncDetailToSupabase.after.contextNext", tripId, next.places);
+
             console.log("[places.delete.persist][7_postDelete.counts]", {
               tripId,
               context: next.places.length,
-              localStorage: loadTripDetailData(tripId).places.length,
+              localStorage: lsPlaces.length,
               supabase: remoteCount,
               deletedIds,
               note:
@@ -216,6 +235,19 @@ export function TripDetailProvider({
                   ? "Context=LS=Supabase aligned after delete"
                   : "check divergence — delete may not have persisted to Supabase",
             });
+
+            if (
+              remoteCount != null &&
+              deletedIds.every(
+                (id) => !remotePlaces.some((place) => place.id === id),
+              )
+            ) {
+              logDeleteTraceFinalSuccess(
+                tripId,
+                "syncDetailToSupabase.remoteConfirmed",
+                remotePlaces,
+              );
+            }
           } finally {
             placesSyncInFlightRef.current -= 1;
           }
@@ -285,6 +317,7 @@ export function TripDetailProvider({
         `[loadTripDetailData] places=${localData.places.length}`,
         { tripId },
       );
+      logDeleteTrace("loadDetail.localStorage", tripId, localData.places);
       const useSupabase = authMode === "supabase" && user != null;
 
       if (!useSupabase) {
@@ -326,6 +359,7 @@ export function TripDetailProvider({
           fetchSupabasePlacesByTripId: remotePlaces.length,
           loadTripDetailData: localPlaces.length,
         });
+        logDeleteTrace("loadDetail.remote", tripId, remotePlaces);
 
         if (
           remotePlaces.length === 0 &&
@@ -389,6 +423,10 @@ export function TripDetailProvider({
           remotePlaces,
           detailData.places,
         );
+        logDeleteTrace("loadDetail.merge", tripId, mergedPlaces, {
+          remoteCount: remotePlaces.length,
+          localCount: detailData.places.length,
+        });
         const pendingLocalPlaces = getLocalOnlyPlaces(
           remotePlaces,
           detailData.places,
@@ -600,6 +638,9 @@ export function TripDetailProvider({
             { tripId, mergedPlaces: mergedPlaces.length },
           );
           console.log(`[setData] places=${mergedPlaces.length}`, { tripId });
+          logDeleteTrace("loadDetail.setData", tripId, mergedPlaces, {
+            note: "Context about to receive mergedPlaces — if watchedPresent, UI will show deleted place again",
+          });
           logPlaceCountPipeline("loadDetail", tripId, {
             context: mergedPlaces.length,
             localStorage: loadTripDetailData(tripId).places.length,
@@ -616,6 +657,11 @@ export function TripDetailProvider({
             checklist: remoteChecklists,
             notes: remoteMemos,
           });
+          logDeleteTraceFinalSuccess(
+            tripId,
+            "loadDetail.setData",
+            mergedPlaces,
+          );
           setHydrated(true);
         }
       } catch (error) {
@@ -648,6 +694,9 @@ export function TripDetailProvider({
 
   useEffect(() => {
     if (!hydrated) return;
+    logDeleteTrace("effect.saveTripDetailData", tripId, data.places, {
+      note: "hydrated effect write-through — stale data here can resurrect deletes into LS",
+    });
     saveTripDetailData(tripId, data);
   }, [tripId, data, hydrated]);
 
@@ -673,6 +722,9 @@ export function TripDetailProvider({
 
             if (deletedIds.length > 0) {
               notePendingPlaceDeletions(deletedIds);
+              watchDeletedPlaces(
+                removed.map((place) => ({ id: place.id, name: place.name })),
+              );
             }
 
             console.log(`[updateData] places=${next.places.length}`, {
@@ -689,6 +741,10 @@ export function TripDetailProvider({
               deletedNames,
               contextNextLength: next.places.length,
             });
+            logDeleteTrace("updateData.contextNext", tripId, next.places, {
+              deletedIds,
+              deletedNames,
+            });
           } else {
             console.log(`[updateData] places=${next.places.length}`, {
               tripId,
@@ -697,6 +753,11 @@ export function TripDetailProvider({
           }
           // insert 실패 시에도 재접속에서 복구되도록 sync 전에 local 보존
           saveTripDetailData(tripId, next);
+          logDeleteTrace(
+            "updateData.afterSaveLocalStorage",
+            tripId,
+            loadTripDetailData(tripId).places,
+          );
           void syncDetailToSupabase(prev, next);
         }
 

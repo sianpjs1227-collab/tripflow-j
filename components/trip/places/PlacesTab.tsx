@@ -7,6 +7,7 @@ import { useTripDetail } from "@/contexts/TripDetailContext";
 import { buildEventFromPlace } from "@/lib/event-utils";
 import { sortEvents } from "@/lib/schedule-utils";
 import { logPlacesTabCounts } from "@/lib/place-count-debug";
+import { logDeleteTrace } from "@/lib/place-delete-trace";
 import {
   createPlace,
   filterPlacesByActiveFilter,
@@ -62,6 +63,9 @@ export default function PlacesTab() {
 
   useEffect(() => {
     logPlacesTabCounts(tripId, data.places);
+    logDeleteTrace("placesTab.contextRender", tripId, data.places, {
+      visibleCount: getVisiblePlaces(data.places).length,
+    });
   }, [tripId, data.places]);
 
   const totalFavoriteCount = useMemo(

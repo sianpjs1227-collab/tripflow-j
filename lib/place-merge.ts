@@ -12,9 +12,11 @@ export function mergeRemoteAndLocalPlaces(
   localPlaces: Place[],
 ): Place[] {
   const byId = new Map<string, Place>();
+  const skippedRemotePending: Place[] = [];
 
   for (const place of remotePlaces) {
     if (isPendingPlaceDeletion(place.id)) {
+      skippedRemotePending.push(place);
       console.log("[places.merge] skip remote (pending delete)", {
         id: place.id,
         name: place.name,
@@ -31,6 +33,14 @@ export function mergeRemoteAndLocalPlaces(
     if (!byId.has(place.id)) {
       byId.set(place.id, place);
     }
+  }
+
+  if (skippedRemotePending.length > 0) {
+    console.log("[places.delete.trace][merge.skippedRemotePendingDeletes]", {
+      count: skippedRemotePending.length,
+      names: skippedRemotePending.map((place) => place.name),
+      ids: skippedRemotePending.map((place) => place.id),
+    });
   }
 
   return [...byId.values()];

@@ -6,7 +6,36 @@ import type {
 import type { Place } from "@/types/place";
 import { coordinatesToMapsLink } from "@/lib/kml-parser";
 import { folderNameToCategory } from "@/lib/kml-folder-map";
-import { generatePlaceId, isKmlPlace } from "@/lib/place-utils";
+import {
+  generatePlaceId,
+  inferPlaceSource,
+  isKmlPlace,
+  placeHasStoredCoordinates,
+} from "@/lib/place-utils";
+
+/** 진단용 — Place 에 없는 kmlPlaceId/kmlFolder 는 null 로 표기 */
+function placeDeleteDebugFields(place: Place) {
+  return {
+    placeId: place.id,
+    name: place.name,
+    source: place.source ?? null,
+    inferredSource: inferPlaceSource(place),
+    isKmlPlace: isKmlPlace(place),
+    kmlPlaceId: null as string | null, // Place 모델에 필드 없음 — 이름 매칭만 사용
+    kmlFolder: null as string | null, // Place 모델에 필드 없음 — import 시 category 로만 반영
+    hidden: place.hidden === true,
+    category: place.category,
+    hasCoordinates: placeHasStoredCoordinates(place),
+    latitude: place.latitude ?? null,
+    longitude: place.longitude ?? null,
+  };
+}
+
+type DeleteSkipReason =
+  | "not_kml_place"
+  | "matched_existing_in_this_kml"
+  | "newly_added_in_this_kml"
+  | "would_delete";
 
 /** KmlPlacemark → Place (Folder → category) */
 export function placemarkToPlace(placemark: KmlPlacemark): Place {
@@ -264,11 +293,87 @@ export function updateKmlPlacemarksIntoPlaces(
 
   if (removeMissing) {
     const beforeCount = nextPlaces.length;
+
+    console.log("[KML update] delete selection rules", {
+      removeMissing,
+      criteria: [
+        "1. isKmlPlace(place) === true  (source==='KML' OR inferred from coordinates; NOT source==='kml' lowercase; NOT kmlPlaceId)",
+        "2. place.id NOT in matchedExistingKmlIds (name matched a placemark in this KML → keep/update)",
+        "3. place.id NOT in newPlaceIds (added from this KML → keep)",
+        "4. MANUAL places are never deleted",
+        "5. matching key = trimmed place.name only (no kmlPlaceId / kmlFolder on Place)",
+      ],
+      matchedByNameCount: matchedExistingKmlIds.size,
+      seenInThisFileNames: [...seenInThisFile],
+      newPlaceIds: [...newPlaceIds],
+    });
+
+    // 기존 장소(특히 숙소) 필드 스냅샷
+    console.log(
+      "[KML update] existing places snapshot (source / kmlPlaceId / hidden / category)",
+    );
+    for (const place of existingPlaces) {
+      const fields = placeDeleteDebugFields(place);
+      if (
+        fields.category === "accommodation" ||
+        fields.isKmlPlace ||
+        /숙소/i.test(fields.name)
+      ) {
+        console.log("[KML update] place.debug", fields);
+      }
+    }
+
+    const exclusionLog: Array<{
+      placeId: string;
+      name: string;
+      reason: DeleteSkipReason;
+      detail: string;
+      fields: ReturnType<typeof placeDeleteDebugFields>;
+    }> = [];
+
     const removalCandidates = nextPlaces.filter((place) => {
-      if (!isKmlPlace(place)) return false;
-      // 이번 파일에서 매칭된 기존 장소·신규 추가는 유지
-      if (matchedExistingKmlIds.has(place.id)) return false;
-      if (newPlaceIds.has(place.id)) return false;
+      const fields = placeDeleteDebugFields(place);
+
+      if (!isKmlPlace(place)) {
+        exclusionLog.push({
+          placeId: place.id,
+          name: place.name,
+          reason: "not_kml_place",
+          detail: `inferredSource=${fields.inferredSource}, source=${String(fields.source)}, hasCoordinates=${fields.hasCoordinates}. Delete targets only isKmlPlace===true (source KML or coords). Not kmlPlaceId.`,
+          fields,
+        });
+        return false;
+      }
+
+      if (matchedExistingKmlIds.has(place.id)) {
+        exclusionLog.push({
+          placeId: place.id,
+          name: place.name,
+          reason: "matched_existing_in_this_kml",
+          detail: `name "${place.name.trim()}" is still present in this KML (seenInThisFile) → treated as UPDATE, not delete`,
+          fields,
+        });
+        return false;
+      }
+
+      if (newPlaceIds.has(place.id)) {
+        exclusionLog.push({
+          placeId: place.id,
+          name: place.name,
+          reason: "newly_added_in_this_kml",
+          detail: "added in this import — keep",
+          fields,
+        });
+        return false;
+      }
+
+      exclusionLog.push({
+        placeId: place.id,
+        name: place.name,
+        reason: "would_delete",
+        detail: "KML place with no name match in this file → delete candidate",
+        fields,
+      });
       return true;
     });
 
@@ -280,6 +385,57 @@ export function updateKmlPlacemarksIntoPlaces(
       matchedExistingKmlIds: [...matchedExistingKmlIds],
       newPlaceIds: [...newPlaceIds],
       seenInThisFileCount: seenInThisFile.size,
+    });
+
+    console.log("[KML update] delete exclusion reasons (per place)", {
+      total: exclusionLog.length,
+      wouldDelete: exclusionLog.filter((row) => row.reason === "would_delete")
+        .length,
+      skippedNotKml: exclusionLog.filter(
+        (row) => row.reason === "not_kml_place",
+      ).length,
+      skippedMatched: exclusionLog.filter(
+        (row) => row.reason === "matched_existing_in_this_kml",
+      ).length,
+      skippedNew: exclusionLog.filter(
+        (row) => row.reason === "newly_added_in_this_kml",
+      ).length,
+    });
+
+    for (const row of exclusionLog) {
+      if (row.reason === "would_delete") continue;
+
+      const isLodgingLike =
+        row.fields.category === "accommodation" || /숙소/i.test(row.name);
+
+      // 전체 MANUAL 스팸 방지: not_kml 은 숙소류만, matched 는 숙소류 + 이름에 숙소
+      if (row.reason === "not_kml_place" && !isLodgingLike) continue;
+      if (
+        row.reason === "matched_existing_in_this_kml" &&
+        !isLodgingLike
+      ) {
+        // 매칭으로 살아남은 숙소만 상세 — 나머지는 summary 에 포함
+        continue;
+      }
+
+      console.log("[KML update] NOT in deleteCandidates", {
+        reason: row.reason,
+        detail: row.detail,
+        ...row.fields,
+      });
+    }
+
+    // 매칭되어 삭제에서 제외된 KML 전체 요약 (숙소 외 포함)
+    const matchedKept = exclusionLog.filter(
+      (row) => row.reason === "matched_existing_in_this_kml",
+    );
+    console.log("[KML update] kept by name match (not deleted)", {
+      count: matchedKept.length,
+      sample: matchedKept.slice(0, 20).map((row) => ({
+        placeId: row.placeId,
+        name: row.name,
+        category: row.fields.category,
+      })),
     });
 
     nextPlaces = nextPlaces.filter((place) => {

@@ -1,12 +1,16 @@
-import { mergeRemoteAndLocalPlaces } from "@/lib/place-merge";
-import { getPendingPlaceDeletions } from "@/lib/place-pending-deletes";
-import { getVisiblePlaces } from "@/lib/place-utils";
-import { isUuid } from "@/lib/supabase";
-import { fetchSupabasePlacesByTripId } from "@/lib/supabase-places";
 import {
   loadTripDetailData,
   saveTripDetailData,
 } from "@/lib/trip-detail-storage";
+import { mergeRemoteAndLocalPlaces } from "@/lib/place-merge";
+import { getPendingPlaceDeletions } from "@/lib/place-pending-deletes";
+import {
+  logDeleteTrace,
+  logDeleteTraceFinalSuccess,
+} from "@/lib/place-delete-trace";
+import { getVisiblePlaces } from "@/lib/place-utils";
+import { isUuid } from "@/lib/supabase";
+import { fetchSupabasePlacesByTripId } from "@/lib/supabase-places";
 import type { Place } from "@/types/place";
 
 export type PlaceCountStage =
@@ -90,10 +94,14 @@ export async function resolvePlacesForHomeStats(
 
   try {
     const remotePlaces = await fetchSupabasePlacesByTripId(tripId);
+    logDeleteTrace("home.fetchSupabasePlacesByTripId", tripId, remotePlaces);
+
     const mergedPlaces = mergeRemoteAndLocalPlaces(
       remotePlaces,
       detail.places,
     );
+    logDeleteTrace("home.mergeRemoteAndLocalPlaces", tripId, mergedPlaces);
+
     const pendingDeletes = getPendingPlaceDeletions();
     const localIds = new Set(detail.places.map((place) => place.id));
     const remoteOnlyAdded = mergedPlaces.filter(
@@ -121,30 +129,33 @@ export async function resolvePlacesForHomeStats(
           : "localStorage already matches merge",
     });
 
-    // 홈 writeThrough 가 삭제된 장소를 다시 LS에 넣지 않도록:
-    // local 비어있지 한데 merge 가 remote-only 를 추가하면 skip
-    // (pending delete tombstone 이 있으면 merge 가 이미 걸러야 함)
-    const wouldResurrect =
-      detail.places.length > 0 && remoteOnlyAdded.length > 0;
+    // 홈 writeThrough 가 remote 의 아직-삭제-안-된 행으로 LS/화면을 되돌리지 않게:
+    // local 이 비어 있지 않은데 merge 가 더 커지면(= remote-only 추가) 절대 LS에 쓰지 않음
+    const wouldExpand =
+      detail.places.length > 0 &&
+      mergedPlaces.length > detail.places.length;
 
-    if (wouldResurrect) {
+    if (wouldExpand || (detail.places.length > 0 && remoteOnlyAdded.length > 0)) {
       console.warn("[places.delete.persist][home.writeThrough.skip]", {
         tripId,
         reason:
-          "merge would add remote-only places into localStorage (possible delete resurrection)",
+          "refuse to expand localStorage from remote-only places (prevents delete resurrection while sync in flight)",
         before: localCount,
         merged: mergedPlaces.length,
         remoteOnlyAddedIds: remoteOnlyAdded.map((place) => place.id),
+        remoteOnlyAddedNames: remoteOnlyAdded.map((place) => place.name),
         pendingDeletes,
       });
-      // 통계는 local(삭제 반영) 우선 — Context/ tombstone 과 맞춤
-      const safePlaces =
-        pendingDeletes.length > 0 ? detail.places : mergedPlaces;
+      logDeleteTrace("home.writeThrough.SKIP_expand", tripId, detail.places, {
+        remoteOnlyAddedNames: remoteOnlyAdded.map((place) => place.name),
+        mergedHadWatched: mergedPlaces.length !== detail.places.length,
+      });
+      // 홈 통계도 local(삭제 반영) 유지 — sync 완료 후 다음 fetch 에서 remote 가 따라옴
       return {
-        places: safePlaces,
+        places: detail.places,
         localCount,
         remoteCount: remotePlaces.length,
-        mergedCount: safePlaces.length,
+        mergedCount: detail.places.length,
       };
     }
 
@@ -152,6 +163,10 @@ export async function resolvePlacesForHomeStats(
       mergedPlaces.length !== detail.places.length ||
       !samePlaceIds(mergedPlaces, detail.places)
     ) {
+      logDeleteTrace("home.writeThrough.BEFORE_save", tripId, mergedPlaces, {
+        beforeLocal: localCount,
+        afterMerged: mergedPlaces.length,
+      });
       saveTripDetailData(tripId, {
         ...detail,
         places: mergedPlaces,
@@ -161,7 +176,14 @@ export async function resolvePlacesForHomeStats(
         before: localCount,
         after: mergedPlaces.length,
       });
+      logDeleteTrace(
+        "home.writeThrough.AFTER_save",
+        tripId,
+        loadTripDetailData(tripId).places,
+      );
     }
+
+    logDeleteTraceFinalSuccess(tripId, "home.resolvePlaces", mergedPlaces);
 
     return {
       places: mergedPlaces,

@@ -8,6 +8,7 @@ import {
   mergeKmlPlacemarksIntoPlaces,
   updateKmlPlacemarksIntoPlaces,
 } from "@/lib/kml-import";
+import { watchDeletedPlaces, logDeleteTrace } from "@/lib/place-delete-trace";
 import { extractKmlFromKmzBuffer } from "@/lib/kmz-utils";
 import { parseKmlPlacemarks } from "@/lib/kml-parser";
 import type { KmlImportResult, KmlPlacemark } from "@/types/kml";
@@ -48,7 +49,7 @@ function isSupportedKmlFileName(name: string): boolean {
 
 /** KML 파일 가져오기 — 여행 My Maps 설정 영역 */
 export default function KmlImportButton() {
-  const { data, updateData } = useTripDetail();
+  const { data, updateData, tripId } = useTripDetail();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pendingPlacemarks, setPendingPlacemarks] = useState<
@@ -80,6 +81,16 @@ export default function KmlImportButton() {
 
       const nextPlaces = holder.result.places;
       const deletedIds = holder.result.deletedIds ?? [];
+      const deletedNames = holder.result.deletedNames ?? [];
+
+      if (deletedIds.length > 0) {
+        watchDeletedPlaces(
+          deletedIds.map((id, index) => ({
+            id,
+            name: deletedNames[index] ?? id,
+          })),
+        );
+      }
 
       console.log("[KmlImportButton] applyImport → updateData", {
         mode,
@@ -88,15 +99,19 @@ export default function KmlImportButton() {
         nextPlacesLength: nextPlaces.length,
         deletedCount: holder.result.deletedCount ?? 0,
         deletedIds,
-        deletedNames: holder.result.deletedNames ?? [],
+        deletedNames,
         deletedStillInNext: deletedIds.filter((id) =>
           nextPlaces.some((place) => place.id === id),
         ),
       });
       console.log("[places.delete.persist][1_kml.deletedIds]", {
         deletedIds,
-        deletedNames: holder.result.deletedNames ?? [],
+        deletedNames,
         nextPlacesLength: nextPlaces.length,
+      });
+      logDeleteTrace("kml.applyImport.nextPlaces", tripId, nextPlaces, {
+        deletedIds,
+        deletedNames,
       });
 
       return {

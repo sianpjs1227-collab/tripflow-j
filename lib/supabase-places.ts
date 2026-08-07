@@ -180,25 +180,69 @@ export async function updateSupabasePlace(place: Place): Promise<void> {
   if (error) throw error;
 }
 
-/** 장소 삭제 — affected rows 검증 (RLS로 0행이면 성공처럼 보이던 문제 방지) */
+/**
+ * 장소 삭제
+ *
+ * 실제 실행:
+ *   client.from("places").delete({ count: "exact" }).eq("id", placeId).select("id")
+ * WHERE 조건: id = placeId 만 (trip_id / source / 기타 필터 없음)
+ *
+ * returning 이 비어도 실제 행이 사라졌는지 post-select 로 재확인한다.
+ * can_edit_trip=true 인데 0행이면 RLS보다 id 불일치·반환값 문제를 우선 조사한다.
+ */
 export async function deleteSupabasePlace(
   placeId: string,
 ): Promise<{ affectedRows: number; alreadyAbsent: boolean; data: unknown }> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client unavailable");
 
-  const payload = { placeId };
+  const normalizedId = placeId.trim();
+  const whereFilters = {
+    id: normalizedId,
+    // trip_id: NOT used
+    // source: NOT used (column does not exist on places)
+  } as const;
 
-  // delete 전 존재 여부 확인 — 0행이 "없음" vs "RLS 거부" 구분
+  console.log("[Supabase Query] places.delete.code", {
+    method: "DELETE",
+    table: "places",
+    supabaseJs: [
+      'client.from("places")',
+      '.delete({ count: "exact" })',
+      `.eq("id", ${JSON.stringify(normalizedId)})`,
+      '.select("id")',
+    ].join(""),
+    whereFilters,
+    whereFilterCount: 1,
+    note: "ONLY filter is .eq(\"id\", placeId). No trip_id/source/hidden filters.",
+  });
+
+  // 3) DELETE 직전: select * where id = placeId
   const { data: existing, error: existingError } = await client
     .from("places")
-    .select("id, name, trip_id")
-    .eq("id", placeId)
+    .select("*")
+    .eq("id", normalizedId)
     .maybeSingle();
 
-  console.log("[Supabase Query] places.delete.precheck", {
-    payload,
+  const idMatch =
+    existing != null
+      ? {
+          clientPlaceId: normalizedId,
+          dbId: existing.id as string,
+          strictEqual: existing.id === normalizedId,
+          trimEqual: String(existing.id).trim() === normalizedId,
+          clientLen: normalizedId.length,
+          dbLen: String(existing.id).length,
+          clientType: typeof normalizedId,
+          dbType: typeof existing.id,
+        }
+      : null;
+
+  console.log("[Supabase Query] places.delete.precheck.selectStar", {
+    sqlLike: `select * from places where id = '${normalizedId}'`,
+    whereFilters,
     existing,
+    idMatch,
     existingError: existingError
       ? {
           message: existingError.message,
@@ -212,28 +256,26 @@ export async function deleteSupabasePlace(
 
   if (!existing) {
     console.log("[Supabase Query] places.delete.result", {
-      payload,
-      error: null,
+      whereFilters,
       affectedRows: 0,
       alreadyAbsent: true,
-      note: "row not visible/absent — treat delete as done",
+      note: "precheck select * returned no row — treat as already deleted",
     });
     return { affectedRows: 0, alreadyAbsent: true, data: null };
   }
 
-  // RLS 진단: SELECT OK / DELETE 0 rows 원인 확인
   const tripId = existing.trip_id as string;
-  const { data: accessDebug, error: accessError } = await client.rpc(
-    "debug_places_delete_access",
-    { p_place_id: placeId },
-  );
   const { data: canEdit, error: canEditError } = await client.rpc(
     "can_edit_trip",
     { p_trip_id: tripId },
   );
+  const { data: accessDebug, error: accessError } = await client.rpc(
+    "debug_places_delete_access",
+    { p_place_id: normalizedId },
+  );
 
-  console.log("[Supabase Query] places.delete.rls_check", {
-    placeId,
+  console.log("[Supabase Query] places.delete.precheck.access", {
+    placeId: normalizedId,
     tripId,
     name: existing.name,
     can_edit_trip: canEdit,
@@ -244,25 +286,34 @@ export async function deleteSupabasePlace(
     accessError: accessError
       ? { message: accessError.message, code: accessError.code }
       : null,
-    note:
-      "SELECT uses is_trip_member; DELETE uses can_edit_trip(owner|editor|trips.user_id). places has no owner/created_by column.",
   });
 
-  const { data, error, count } = await client
+  // 실제 DELETE — where: id only
+  const { data, error, count, status, statusText } = await client
     .from("places")
     .delete({ count: "exact" })
-    .eq("id", placeId)
+    .eq("id", normalizedId)
     .select("id");
 
-  const affectedRows =
-    typeof count === "number"
-      ? count
-      : Array.isArray(data)
-        ? data.length
-        : 0;
+  const returningCount = Array.isArray(data) ? data.length : 0;
+  const headerCount = typeof count === "number" ? count : null;
+
+  // 4) DELETE 직후 재조회 — returning 이 비어도 실제 삭제 여부 판별
+  const { data: afterRow, error: afterError } = await client
+    .from("places")
+    .select("id, name, trip_id")
+    .eq("id", normalizedId)
+    .maybeSingle();
+
+  const rowGone = afterRow == null && !afterError;
+  const affectedRows = rowGone
+    ? Math.max(headerCount ?? 0, returningCount, 1)
+    : (headerCount ?? returningCount);
 
   console.log("[Supabase Query] places.delete.result", {
-    payload,
+    whereFilters,
+    httpStatus: status,
+    statusText,
     error: error
       ? {
           message: error.message,
@@ -271,40 +322,75 @@ export async function deleteSupabasePlace(
           hint: error.hint,
         }
       : null,
-    affectedRows,
-    alreadyAbsent: false,
-    returnedIds: Array.isArray(data)
+    countHeader: headerCount,
+    returningCount,
+    returningIds: Array.isArray(data)
       ? data.map((row: { id?: string }) => row.id)
       : data,
-    precheckName: existing.name,
-    rlsHint:
-      affectedRows === 0
-        ? "DELETE policy blocked (can_edit_trip=false or places_delete_editor missing). Apply migration 20260314000021_places_delete_rls_repair.sql"
+    postSelect: {
+      sqlLike: `select id, name, trip_id from places where id = '${normalizedId}'`,
+      afterRow,
+      afterError: afterError
+        ? { message: afterError.message, code: afterError.code }
         : null,
+      rowGone,
+    },
+    idMatch,
+    can_edit_trip: canEdit,
+    affectedRows,
+    diagnosis: rowGone
+      ? "DELETE succeeded (row absent on post-select)"
+      : canEdit === true
+        ? "DELETE failed while can_edit_trip=true — investigate WHERE/id mismatch or policy USING not seeing row; not a simple permission denial"
+        : "DELETE failed — can_edit_trip is not true; may be RLS",
   });
 
   logSupabaseQueryResult(
     "places.delete",
-    { placeId, affectedRows, data, precheck: existing, accessDebug, canEdit },
+    {
+      whereFilters,
+      affectedRows,
+      data,
+      precheck: existing,
+      afterRow,
+      rowGone,
+      canEdit,
+      accessDebug,
+    },
     error,
   );
 
   if (error) throw error;
 
-  if (affectedRows === 0) {
+  if (!rowGone) {
+    const reasonParts = [
+      "DELETE did not remove the row (post-select still finds it).",
+      `where: only .eq("id", ${JSON.stringify(normalizedId)})`,
+      `db.id === client.id: ${String(idMatch?.strictEqual)}`,
+      `can_edit_trip: ${String(canEdit)}`,
+      `returningCount: ${returningCount}, countHeader: ${String(headerCount)}`,
+    ];
     console.error(
       "[Supabase Query Error] places.delete\n" +
-        `message: row existed but delete matched 0 rows (likely RLS)\n` +
+        `message: DELETE_ZERO_ROWS (condition/id investigation, not assuming RLS)\n` +
         `code: DELETE_ZERO_ROWS\n` +
-        `details: placeId=${placeId} name=${existing.name} tripId=${tripId} can_edit_trip=${String(canEdit)}\n` +
-        `hint: SELECT=is_trip_member, DELETE=can_edit_trip(owner|editor|trips.user_id). Run places_delete_rls_repair migration.`,
+        `details: ${reasonParts.join(" | ")}\n` +
+        `hint: Compare client placeId with DB id in places.delete.precheck.selectStar.idMatch`,
     );
     throw new Error(
-      `places.delete affected 0 rows for id=${placeId} (RLS blocked?)`,
+      `places.delete matched 0 rows for id=${normalizedId} (row still present after DELETE)`,
     );
   }
 
-  return { affectedRows, alreadyAbsent: false, data };
+  // returning 이 비었어도 행이 사라졌으면 성공으로 처리
+  if (returningCount === 0 && headerCount !== 1) {
+    console.warn("[Supabase Query] places.delete.returningEmptyButGone", {
+      whereFilters,
+      note: "PostgREST returning/count empty but post-select confirms deletion — treating as success",
+    });
+  }
+
+  return { affectedRows: 1, alreadyAbsent: false, data };
 }
 
 /** places 배열 diff 동기화 */
