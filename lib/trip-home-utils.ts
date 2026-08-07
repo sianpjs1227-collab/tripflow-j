@@ -251,6 +251,17 @@ export async function getTripHomeStatsAsync(
     trip.id,
     options.useSupabase,
   );
+
+  console.log("[placeCount.path][getTripHomeStatsAsync]", {
+    tripId: trip.id,
+    contextUnavailableOnHome: true,
+    localStoragePlaces: detail.places.length,
+    homePlaceCount: resolved.mergedCount,
+    homePlacesLength: resolved.places.length,
+    remoteCount: resolved.remoteCount,
+    note: "Home placeCount = resolved.mergedCount (not TripDetailContext)",
+  });
+
   return buildTripHomeStats(trip, resolved.mergedCount, detail);
 }
 

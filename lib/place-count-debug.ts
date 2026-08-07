@@ -60,6 +60,27 @@ export function logPlaceCountPipeline(
   });
 }
 
+function placeCountSnapshot(places: Place[]) {
+  return places.map((place) => ({
+    id: place.id,
+    name: place.name,
+    hidden: place.hidden === true,
+    source: place.source ?? null,
+  }));
+}
+
+function diffPlacesById(
+  left: Place[],
+  right: Place[],
+): { onlyLeft: Place[]; onlyRight: Place[] } {
+  const rightIds = new Set(right.map((place) => place.id));
+  const leftIds = new Set(left.map((place) => place.id));
+  return {
+    onlyLeft: left.filter((place) => !rightIds.has(place.id)),
+    onlyRight: right.filter((place) => !leftIds.has(place.id)),
+  };
+}
+
 /**
  * 홈/로컬 통계용 places — Supabase remote + localStorage merge.
  * 장소 탭(Context merge)과 동일 기준으로 맞춘다.
@@ -75,6 +96,14 @@ export async function resolvePlacesForHomeStats(
 }> {
   const detail = loadTripDetailData(tripId);
   const localCount = detail.places.length;
+
+  console.log("[placeCount.path][home] start", {
+    tripId,
+    path: "useTripHomeStats → getTripHomeStatsAsync → resolvePlacesForHomeStats → placeCount=mergedCount|localCount",
+    localStorageCount: localCount,
+    filtersApplied: "none (raw places.length — NO getVisiblePlaces / hidden / dedupe)",
+    snapshot: placeCountSnapshot(detail.places),
+  });
 
   if (!useSupabase || !isUuid(tripId)) {
     logPlaceCountPipeline("home", tripId, {
@@ -108,6 +137,17 @@ export async function resolvePlacesForHomeStats(
       (place) => !localIds.has(place.id),
     );
 
+    const localVsMerged = diffPlacesById(detail.places, mergedPlaces);
+    console.log("[placeCount.diff][home.local_vs_merged]", {
+      tripId,
+      localCount,
+      remoteCount: remotePlaces.length,
+      mergedCount: mergedPlaces.length,
+      onlyInLocalStorage: placeCountSnapshot(localVsMerged.onlyLeft),
+      onlyInMerged: placeCountSnapshot(localVsMerged.onlyRight),
+      pendingDeletes,
+    });
+
     console.log("[places.delete.persist][home.entry]", {
       tripId,
       loadTripDetailData: localCount,
@@ -116,17 +156,6 @@ export async function resolvePlacesForHomeStats(
       pendingDeletes,
       remoteOnlyAddedIds: remoteOnlyAdded.map((place) => place.id),
       remoteOnlyAddedNames: remoteOnlyAdded.map((place) => place.name),
-    });
-
-    logPlaceCountPipeline("home", tripId, {
-      localStorage: localCount,
-      remote: remotePlaces.length,
-      merged: mergedPlaces.length,
-      placeCountFinal: mergedPlaces.length,
-      note:
-        localCount !== mergedPlaces.length
-          ? `localStorage ${localCount} → merged ${mergedPlaces.length} (synced from remote)`
-          : "localStorage already matches merge",
     });
 
     // 홈 writeThrough 가 remote 의 아직-삭제-안-된 행으로 LS/화면을 되돌리지 않게:
@@ -150,7 +179,21 @@ export async function resolvePlacesForHomeStats(
         remoteOnlyAddedNames: remoteOnlyAdded.map((place) => place.name),
         mergedHadWatched: mergedPlaces.length !== detail.places.length,
       });
-      // 홈 통계도 local(삭제 반영) 유지 — sync 완료 후 다음 fetch 에서 remote 가 따라옴
+
+      console.log("[placeCount.path][home] final", {
+        tripId,
+        placeCount: detail.places.length,
+        source: "localStorage (expand skipped — not merged)",
+        snapshot: placeCountSnapshot(detail.places),
+      });
+      logPlaceCountPipeline("home", tripId, {
+        localStorage: localCount,
+        remote: remotePlaces.length,
+        merged: mergedPlaces.length,
+        placeCountFinal: detail.places.length,
+        note: "placeCount=localStorage because expand skipped",
+      });
+
       return {
         places: detail.places,
         localCount,
@@ -185,6 +228,23 @@ export async function resolvePlacesForHomeStats(
 
     logDeleteTraceFinalSuccess(tripId, "home.resolvePlaces", mergedPlaces);
 
+    console.log("[placeCount.path][home] final", {
+      tripId,
+      placeCount: mergedPlaces.length,
+      source: "merged(remote+localStorage)",
+      snapshot: placeCountSnapshot(mergedPlaces),
+    });
+    logPlaceCountPipeline("home", tripId, {
+      localStorage: localCount,
+      remote: remotePlaces.length,
+      merged: mergedPlaces.length,
+      placeCountFinal: mergedPlaces.length,
+      note:
+        localCount !== mergedPlaces.length
+          ? `localStorage ${localCount} → merged ${mergedPlaces.length}`
+          : "localStorage already matches merge",
+    });
+
     return {
       places: mergedPlaces,
       localCount,
@@ -217,16 +277,93 @@ function samePlaceIds(a: Place[], b: Place[]): boolean {
   return b.every((place) => ids.has(place.id));
 }
 
+/**
+ * PlacesTab(Context) vs localStorage vs Home resolve 개수/구성 비교.
+ * PlacesTab에만 있는 place 를 찾아 출력한다.
+ */
 export function logPlacesTabCounts(
   tripId: string,
   contextPlaces: Place[],
 ): void {
   const localPlaces = loadTripDetailData(tripId).places;
+  const visible = getVisiblePlaces(contextPlaces);
+  const hiddenPlaces = contextPlaces.filter((place) => place.hidden === true);
+  const ctxVsLs = diffPlacesById(contextPlaces, localPlaces);
+
+  console.log("[placeCount.path][placesTab]", {
+    tripId,
+    path: "TripDetailContext.data.places (raw length for pipeline; UI list uses getVisiblePlaces)",
+    contextCount: contextPlaces.length,
+    visibleCount: visible.length,
+    hiddenCount: hiddenPlaces.length,
+    localStorageCount: localPlaces.length,
+    filtersOnContextRaw: "none for Context.length",
+    filtersOnVisibleList: "getVisiblePlaces → hidden!==true",
+    snapshot: placeCountSnapshot(contextPlaces),
+  });
+
+  console.log("[placeCount.diff][context_vs_localStorage]", {
+    tripId,
+    context: contextPlaces.length,
+    localStorage: localPlaces.length,
+    onlyInContext_notInLocalStorage: placeCountSnapshot(ctxVsLs.onlyLeft),
+    onlyInLocalStorage_notInContext: placeCountSnapshot(ctxVsLs.onlyRight),
+    hiddenInContext: placeCountSnapshot(hiddenPlaces),
+  });
+
   logPlaceCountPipeline("placesTab", tripId, {
     context: contextPlaces.length,
     localStorage: localPlaces.length,
     placesTabFinal: contextPlaces.length,
     placeCountFinal: undefined,
-    note: `visible=${getVisiblePlaces(contextPlaces).length}`,
+    note: `visible=${visible.length} hidden=${hiddenPlaces.length}`,
+  });
+
+  // Context 가 LS 보다 앞선 경우(신규 1개 등) Home 이 뒤처지지 않게 LS 정렬
+  if (
+    ctxVsLs.onlyLeft.length > 0 &&
+    ctxVsLs.onlyRight.length === 0 &&
+    contextPlaces.length > localPlaces.length
+  ) {
+    console.warn("[placeCount.align][context_ahead_of_localStorage]", {
+      tripId,
+      missingFromLocalStorage: placeCountSnapshot(ctxVsLs.onlyLeft),
+      note: "writing Context places to localStorage so Home placeCount can catch up",
+    });
+    const detail = loadTripDetailData(tripId);
+    saveTripDetailData(tripId, { ...detail, places: contextPlaces });
+  }
+
+  void resolvePlacesForHomeStats(tripId, isUuid(tripId)).then((resolved) => {
+    const ctxVsHome = diffPlacesById(contextPlaces, resolved.places);
+    console.log("[placeCount.diff][PlacesTab_vs_Home]", {
+      tripId,
+      t: new Date().toISOString(),
+      contextPlacesLength: contextPlaces.length,
+      homePlacesLength: resolved.places.length,
+      homePlaceCount: resolved.mergedCount,
+      homeSourceCounts: {
+        localStorage: resolved.localCount,
+        remote: resolved.remoteCount,
+        mergedCount: resolved.mergedCount,
+      },
+      /** PlacesTab(Context)에는 있지만 Home placeCount 소스에는 없는 place */
+      onlyInPlacesTab_notInHome: placeCountSnapshot(ctxVsHome.onlyLeft),
+      /** Home에는 있지만 PlacesTab Context에는 없는 place */
+      onlyInHome_notInPlacesTab: placeCountSnapshot(ctxVsHome.onlyRight),
+      homeSnapshot: placeCountSnapshot(resolved.places),
+    });
+
+    if (ctxVsHome.onlyLeft.length > 0) {
+      console.warn(
+        "[placeCount.diff] ★ PlacesTab only (missing from Home)",
+        ctxVsHome.onlyLeft.map((place) => ({
+          placeId: place.id,
+          name: place.name,
+          hidden: place.hidden === true,
+          source: place.source ?? null,
+        })),
+      );
+    }
   });
 }
